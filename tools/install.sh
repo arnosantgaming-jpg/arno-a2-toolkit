@@ -19,6 +19,12 @@ pkill -f "$app/capture/arnoa2-capture" 2>/dev/null || true
 mkdir -p "$(dirname "$app")" "$(dirname "$bin")" "$share/applications" "$share/icons/hicolor/256x256/apps"
 rm -rf -- "$app.new"
 cp -a -- "$build" "$app.new"
+# An unchanged capture program keeps its permission: move the installed copy (with its
+# file capability) into the new tree instead of the fresh, unprivileged copy.
+if [[ -f "$app/capture/arnoa2-capture" ]] && cmp -s "$app/capture/arnoa2-capture" "$app.new/capture/arnoa2-capture" && diff -rq "$app/capture" "$app.new/capture" >/dev/null 2>&1; then
+    rm -rf -- "$app.new/capture"
+    mv -- "$app/capture" "$app.new/capture"
+fi
 rm -rf -- "$app"
 mv -- "$app.new" "$app"
 cp -- "$app/icon.png" "$share/icons/hicolor/256x256/apps/$id.png"

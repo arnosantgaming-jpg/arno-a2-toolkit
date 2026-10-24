@@ -73,7 +73,13 @@ maps.Preferences.MiniShape = "Round";
 tracker.OpenMiniMap();
 var mini = tracker.MiniMap!;
 Thread.Sleep(400);
+foreach (var b in mini.GetVisualDescendants().OfType<Border>().Where(b => b.Child is StackPanel { Orientation: Avalonia.Layout.Orientation.Horizontal } sp && sp.Children.OfType<Slider>().Any()))
+    b.IsVisible = true; // show the hover controls for the screenshot
 Save(mini, "minimap-round.png");
+var slider = mini.GetVisualDescendants().OfType<Slider>().Single();
+var pill = slider.GetVisualAncestors().OfType<Border>().First();
+var sliderBox = slider.TransformToVisual(pill)!.Value.Transform(new Point(0, 0));
+Check(sliderBox.Y >= 0 && sliderBox.Y + slider.Bounds.Height <= pill.Bounds.Height + 0.5, $"opacity slider fits inside its pill ({sliderBox.Y:F1}+{slider.Bounds.Height:F1} in {pill.Bounds.Height:F1})");
 tracker.SetMiniMapShape(false);
 mini.Width = 380;
 mini.Height = 260;

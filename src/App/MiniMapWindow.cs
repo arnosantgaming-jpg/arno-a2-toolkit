@@ -21,7 +21,7 @@ public sealed class MiniMapWindow : Window
     readonly FrameControl frame = new();
     readonly StackPanel controls = new() { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, IsVisible = false };
     readonly Border opacityPanel;
-    readonly Slider opacity = new() { Minimum = 0.2, Maximum = 1, Width = 90 };
+    readonly Slider opacity = new() { Minimum = 0.2, Maximum = 1, Width = 100, Height = 32, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0) };
     readonly TextBlock guidance = new() { FontSize = 11.5, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly Border grip;
     readonly Button shapeButton;
@@ -77,10 +77,10 @@ public sealed class MiniMapWindow : Window
             controls.Children.Add(button);
         controls.Margin = new Thickness(0, 0, 0, Frame + 10);
 
-        var opacityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var opacityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         opacityRow.Children.Add(new TextBlock { Text = "Opacity", FontSize = 10.5, Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center });
         opacityRow.Children.Add(opacity);
-        opacityPanel = new Border { Background = Brush.Parse("#CC0B1118"), CornerRadius = new CornerRadius(11), Padding = new Thickness(10, 0), Height = 26, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Frame + 12, 0, 0), Child = opacityRow, IsVisible = false };
+        opacityPanel = new Border { Background = Brush.Parse("#CC0B1118"), Padding = new Thickness(12, 0), Height = 36, CornerRadius = new CornerRadius(18), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Frame + 10, 0, 0), Child = opacityRow, IsVisible = false };
 
         grip = new Border
         {
