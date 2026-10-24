@@ -6,5 +6,8 @@
     <Deterministic>true</Deterministic>
     <DebugType>none</DebugType>
     <NuGetAudit>true</NuGetAudit>
+    <!-- Identical source gives identical binaries, so reinstalls can keep the capture
+         program (and its permission) when it has not changed. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>
