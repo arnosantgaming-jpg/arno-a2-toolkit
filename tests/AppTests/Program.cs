@@ -83,6 +83,10 @@ double label = mini.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Tex
 double sliderMiddle = sliderBox.Y + slider.Bounds.Height / 2;
 Check(sliderBox.Y >= 0 && sliderBox.Y + slider.Bounds.Height <= pill.Bounds.Height + 0.5, $"opacity slider fits inside its pill ({sliderBox.Y:F1}+{slider.Bounds.Height:F1} in {pill.Bounds.Height:F1})");
 Check(Math.Abs(sliderMiddle - pill.Bounds.Height / 2) <= 1 && Math.Abs(label - sliderMiddle) <= 1.5, $"slider and label centred in the pill (label {label:F1}, slider {sliderMiddle:F1}, pill middle {pill.Bounds.Height / 2:F1})");
+slider.Value = 0.4;
+Check(Math.Abs(mini.GetVisualDescendants().OfType<MapCanvas>().Single().Opacity - 0.4) < 0.01 && Math.Abs(slider.GetVisualAncestors().OfType<Border>().First().Opacity - 1) < 0.01, "opacity fades the whole map, not the controls");
+Save(mini, "minimap-faded.png");
+slider.Value = 0.8;
 tracker.SetMiniMapShape(false);
 mini.Width = 380;
 mini.Height = 260;

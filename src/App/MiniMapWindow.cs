@@ -25,6 +25,7 @@ public sealed class MiniMapWindow : Window
     readonly TextBlock guidance = new() { FontSize = 11.5, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly Border grip;
     readonly Button shapeButton;
+    readonly Border label;
     bool sizing;
 
     public MiniMapWindow(MapHub hub)
@@ -47,13 +48,12 @@ public sealed class MiniMapWindow : Window
             Position = new PixelPoint(x, y);
         }
 
-        canvas = new MapCanvas(hub, minimap: true) { Zoom = preferences.MiniZoom, TileOpacity = preferences.MiniOpacity, Margin = new Thickness(Frame) };
+        canvas = new MapCanvas(hub, minimap: true) { Zoom = preferences.MiniZoom, Margin = new Thickness(Frame) };
         opacity.Value = preferences.MiniOpacity;
         opacity.ValueChanged += value =>
         {
-            canvas.TileOpacity = value;
             preferences.MiniOpacity = value;
-            canvas.InvalidateVisual();
+            Fade(value);
         };
 
         shapeButton = Small("◯", "Switch between circle and rectangle", ToggleShape);
@@ -112,13 +112,14 @@ public sealed class MiniMapWindow : Window
                 BeginMoveDrag(e);
         };
 
-        var label = new Border { Background = Brush.Parse("#D90B1118"), BorderBrush = Brush.Parse("#80C9A227"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 2), Height = 24, HorizontalAlignment = HorizontalAlignment.Center, Child = guidance, Margin = new Thickness(8, 4, 8, 0) };
+        label = new Border { Background = Brush.Parse("#D90B1118"), BorderBrush = Brush.Parse("#80C9A227"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 2), Height = 24, HorizontalAlignment = HorizontalAlignment.Center, Child = guidance, Margin = new Thickness(8, 4, 8, 0) };
         var layout = new DockPanel();
         DockPanel.SetDock(label, Dock.Bottom);
         layout.Children.Add(label);
         layout.Children.Add(face);
         Content = layout;
 
+        Fade(preferences.MiniOpacity);
         PointerEntered += (_, _) => ShowControls(true);
         PointerExited += (_, _) => ShowControls(false);
         PointerReleased += (_, _) => sizing = false;
@@ -184,6 +185,15 @@ public sealed class MiniMapWindow : Window
         face.Height = h;
         double iw = Math.Max(w - 2 * Frame, 0), ih = Math.Max(h - 2 * Frame, 0);
         canvas.Clip = Round ? new EllipseGeometry(new Rect(0, 0, iw, ih)) : new RectangleGeometry(new Rect(0, 0, iw, ih), 8, 8);
+    }
+
+    /// <summary>See-through: the whole map, frame and label fade so the game shows behind
+    /// them (the window itself is transparent). Hover controls stay fully visible.</summary>
+    void Fade(double value)
+    {
+        canvas.Opacity = value;
+        frame.Opacity = value;
+        label.Opacity = Math.Max(value, 0.5);
     }
 
     void ShowControls(bool show)
