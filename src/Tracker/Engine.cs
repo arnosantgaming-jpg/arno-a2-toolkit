@@ -68,6 +68,8 @@ public sealed class Engine
     public long Gaps { get; private set; }
     public DateTimeOffset? LastSoulsUtc { get; private set; }
     public event Action<Notice>? Noticed;
+    /// <summary>Every message decoded from the game connection, in order (for the live map).</summary>
+    public event Action<Message, DateTimeOffset>? Decoded;
 
     public Connection Connection => flow == null ? Connection.Waiting : LocalEntity == null ? Connection.Identifying : Collection.Synced ? Connection.Live : Connection.Unsynced;
 
@@ -135,6 +137,7 @@ public sealed class Engine
 
         if (id != flow)
             return;
+        Decoded?.Invoke(message, clock);
         if (holdingSince != null && message is SoulChange or RankReached or CollectionSnapshot)
         {
             held.Add((message, clock));

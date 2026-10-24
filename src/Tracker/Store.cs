@@ -65,7 +65,7 @@ public sealed class Store(string folder)
     public string Folder { get; } = folder;
     string File => Path.Combine(Folder, "data.json");
 
-    public static string DefaultFolder() => Path.Combine(Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } home ? home : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"), "arnos-a2-pet-tracker");
+    public static string DefaultFolder() => Path.Combine(Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } home ? home : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"), "arno-pet-tracker");
 
     public SavedState Load()
     {
