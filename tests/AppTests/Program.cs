@@ -73,13 +73,16 @@ maps.Preferences.MiniShape = "Round";
 tracker.OpenMiniMap();
 var mini = tracker.MiniMap!;
 Thread.Sleep(400);
-foreach (var b in mini.GetVisualDescendants().OfType<Border>().Where(b => b.Child is StackPanel { Orientation: Avalonia.Layout.Orientation.Horizontal } sp && sp.Children.OfType<Slider>().Any()))
+foreach (var b in mini.GetVisualDescendants().OfType<Border>().Where(b => b.Child is StackPanel { Orientation: Avalonia.Layout.Orientation.Horizontal } sp && sp.Children.OfType<GoldSlider>().Any()))
     b.IsVisible = true; // show the hover controls for the screenshot
 Save(mini, "minimap-round.png");
-var slider = mini.GetVisualDescendants().OfType<Slider>().Single();
+var slider = mini.GetVisualDescendants().OfType<GoldSlider>().Single();
 var pill = slider.GetVisualAncestors().OfType<Border>().First();
 var sliderBox = slider.TransformToVisual(pill)!.Value.Transform(new Point(0, 0));
+double label = mini.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "Opacity").TransformToVisual(pill)!.Value.Transform(new Point(0, 0)).Y + mini.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "Opacity").Bounds.Height / 2;
+double sliderMiddle = sliderBox.Y + slider.Bounds.Height / 2;
 Check(sliderBox.Y >= 0 && sliderBox.Y + slider.Bounds.Height <= pill.Bounds.Height + 0.5, $"opacity slider fits inside its pill ({sliderBox.Y:F1}+{slider.Bounds.Height:F1} in {pill.Bounds.Height:F1})");
+Check(Math.Abs(sliderMiddle - pill.Bounds.Height / 2) <= 1 && Math.Abs(label - sliderMiddle) <= 1.5, $"slider and label centred in the pill (label {label:F1}, slider {sliderMiddle:F1}, pill middle {pill.Bounds.Height / 2:F1})");
 tracker.SetMiniMapShape(false);
 mini.Width = 380;
 mini.Height = 260;

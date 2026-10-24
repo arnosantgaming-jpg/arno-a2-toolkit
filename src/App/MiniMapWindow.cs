@@ -21,7 +21,7 @@ public sealed class MiniMapWindow : Window
     readonly FrameControl frame = new();
     readonly StackPanel controls = new() { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, IsVisible = false };
     readonly Border opacityPanel;
-    readonly Slider opacity = new() { Minimum = 0.2, Maximum = 1, Width = 100, Height = 32, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0) };
+    readonly GoldSlider opacity = new() { Minimum = 0.2, Maximum = 1, Width = 100, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock guidance = new() { FontSize = 11.5, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly Border grip;
     readonly Button shapeButton;
@@ -49,10 +49,11 @@ public sealed class MiniMapWindow : Window
 
         canvas = new MapCanvas(hub, minimap: true) { Zoom = preferences.MiniZoom, TileOpacity = preferences.MiniOpacity, Margin = new Thickness(Frame) };
         opacity.Value = preferences.MiniOpacity;
-        opacity.ValueChanged += (_, _) =>
+        opacity.ValueChanged += value =>
         {
-            canvas.TileOpacity = opacity.Value;
-            preferences.MiniOpacity = opacity.Value;
+            canvas.TileOpacity = value;
+            preferences.MiniOpacity = value;
+            canvas.InvalidateVisual();
         };
 
         shapeButton = Small("◯", "Switch between circle and rectangle", ToggleShape);
@@ -80,7 +81,7 @@ public sealed class MiniMapWindow : Window
         var opacityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         opacityRow.Children.Add(new TextBlock { Text = "Opacity", FontSize = 10.5, Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center });
         opacityRow.Children.Add(opacity);
-        opacityPanel = new Border { Background = Brush.Parse("#CC0B1118"), Padding = new Thickness(12, 0), Height = 36, CornerRadius = new CornerRadius(18), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Frame + 10, 0, 0), Child = opacityRow, IsVisible = false };
+        opacityPanel = new Border { Background = Brush.Parse("#CC0B1118"), Padding = new Thickness(12, 0), Height = 28, CornerRadius = new CornerRadius(14), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Frame + 10, 0, 0), Child = opacityRow, IsVisible = false };
 
         grip = new Border
         {
