@@ -20,6 +20,8 @@ account at risk — read [LEGAL.md](LEGAL.md).
   with your position, pet spawns and the best farming spots for what you still need.
   Your position comes from the in-game minimap when it is visible (about 2 m), exact
   server positions after skills and hits, or a steady estimate from nearby creatures.
+  Your marker is an arrow pointing your camera, read from the view cone on the in-game
+  minimap; the mini-map can turn with it (hover → N / ↻) or stay north up.
 - **No relog needed:** started mid-session it recognises your character from game
   traffic; one login with the tracker running syncs exact soul totals.
 
