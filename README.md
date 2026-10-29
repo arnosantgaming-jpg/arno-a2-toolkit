@@ -16,7 +16,7 @@ account at risk — read [LEGAL.md](LEGAL.md).
 - **Tracker overlay:** pets you just earned souls for (Recent) or whose creatures are
   around you (Nearby), pinned pets on top, farming goals and session stats.
 - **Black Cloud Merchant:** offers worth buying for pets you have not maxed.
-- **Live map:** a mini-map (circle or rectangle) and a full map (Verteron, Altgard)
+- **Live map:** a mini-map (circle or rectangle) and a full map (Verteron, Altgard, the Abyss)
   with your position, pet spawns and the best farming spots for what you still need.
   Your position comes from the in-game minimap when it is visible (about 2 m), exact
   server positions after skills and hits, or a steady estimate from nearby creatures.

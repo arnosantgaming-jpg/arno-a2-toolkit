@@ -206,6 +206,12 @@ var after = canvas.Region(anchor);
 Check(Math.Abs(after.X - before.X) < 1e-9 && Math.Abs(after.Y - before.Y) < 1e-9, "zooming the turned map keeps the place under the pointer");
 canvas.ZoomAt(anchor, 0.8);
 canvas.Follow = true;
+// Back on the player once the map's next animation frame has re-centred it.
+for (int i = 0; i < 50 && Math.Abs(canvas.Center.X - player.X) + Math.Abs(canvas.Center.Y - player.Y) > 1e-6; i++)
+{
+    Thread.Sleep(20);
+    Dispatcher.UIThread.RunJobs();
+}
 
 mini.ShowHeading(null);
 Check(canvas.Turned == 0 && Blue(middle + new Vector(0, -6)) && Blue(middle + new Vector(0, 6)) && !Blue(middle), "camera not read: north up with the plain dot");
@@ -249,5 +255,43 @@ var full = tracker.FullMap!;
 Thread.Sleep(400);
 Save(full, "fullmap.png");
 Check(Text(full).Contains("Best spots"), "full map lists spots");
+
+// The Abyss: no zone id is known for it, so it is recognised from its pet creatures.
+var abyss = ArnoA2.App.Map.WorldMaps.All["abyss"];
+ArnoA2.App.Map.Positions Seen(int zone, string region)
+{
+    var seen = new ArnoA2.App.Map.Positions();
+    seen.Observe(new ZoneEntered(zone, null, null), null, now);
+    var map = ArnoA2.App.Map.WorldMaps.All[region];
+    int entity = 1;
+    foreach (var point in ArnoA2.App.Map.SpawnAtlas.Region(region).Points.GroupBy(p => p.NpcId).Take(3).Select(g => g.First()))
+    {
+        var (x, y) = map.World(point.X, point.Y);
+        seen.Observe(new NpcAppeared(entity++, point.NpcId, (float)x, (float)y), null, now);
+    }
+
+    return seen;
+}
+
+Check(Seen(4242, "abyss").Region() == "abyss", "Abyss creatures in a zone without a map: the Abyss");
+Check(Seen(0, "abyss").Region() == "abyss", "Abyss creatures before any zone message: the Abyss");
+Check(Seen(4242, "verteron").Region() == null, "Verteron creatures in another zone (an instance) do not move the map");
+Check(Seen(1110, "abyss").Region() == "altgard", "a known zone wins over the creatures");
+// Entering it live: an unknown zone, then its creatures come into view.
+state.Positions.Observe(new ZoneEntered(4242, null, null), null, now);
+int abyssEntity = 900000;
+foreach (var point in ArnoA2.App.Map.SpawnAtlas.Region("abyss").Points.Where((_, i) => i % 40 == 0).Take(12))
+{
+    var (x, y) = abyss.World(point.X, point.Y);
+    state.Positions.Observe(new NpcAppeared(abyssEntity++, point.NpcId, (float)x, (float)y), null, now);
+}
+
+Thread.Sleep(700);
+Save(full, "fullmap-abyss.png");
+var regionBox = full.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Items.Contains("Abyss"));
+Check(maps.Region == "abyss" && regionBox.SelectedItem as string == "Abyss" && maps.Spawns.Points.Count > 900, "in the Abyss the full map shows it with its spawns");
+Check(maps.Spawns.Tiles.All(t => File.Exists(Path.Combine(AppContext.BaseDirectory, "maps", "abyss", $"{t.Column}_{t.Row}.jpg"))), "the Abyss tiles are bundled");
+var (centreX, centreY) = abyss.Normalize(abyss.World(0.5, 0.5).X, abyss.World(0.5, 0.5).Y);
+Check(Math.Abs(centreX - 0.5) < 1e-9 && Math.Abs(centreY - 0.5) < 1e-9, "Abyss map transform round trip");
 Console.WriteLine($"{checks} app checks passed; screenshots in {output}");
 

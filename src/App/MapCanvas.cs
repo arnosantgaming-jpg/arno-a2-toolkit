@@ -15,7 +15,6 @@ namespace ArnoA2.App;
 public sealed class MapCanvas : Control
 {
     static readonly Dictionary<string, Bitmap?> Tiles = new();
-    static readonly IBrush Water = Brush.Parse("#0E1A22");
     static readonly IPen Outline = new Pen(Brushes.White, 1.5);
     static readonly IPen SpotPen = new Pen(Brush.Parse("#FFD54F"), 2);
     static readonly IPen TargetPen = new Pen(Brush.Parse("#FFD54F"), 3);
@@ -117,8 +116,8 @@ public sealed class MapCanvas : Control
     public override void Render(DrawingContext context)
     {
         var bounds = new Rect(Bounds.Size);
-        context.FillRectangle(Water, bounds);
         var map = hub.Map;
+        context.FillRectangle(Brush.Parse(map.Background), bounds);
         var region = hub.Spawns;
         double cell = Pixels / map.Grid;
         // Tiles are laid out north up and the whole layer is turned about the middle; any tile

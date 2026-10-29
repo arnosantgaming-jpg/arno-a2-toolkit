@@ -45,7 +45,7 @@ public sealed class SettingsWindow : Window
             maps.SetMinimapReading(v);
             maps.Save();
         }));
-        panel.Children.Add(Ui.Note("Reads only the minimap corner of the game window (about 5% of one CPU core). Verteron and Altgard."));
+        panel.Children.Add(Ui.Note("Reads only the minimap corner of the game window (about 5% of one CPU core). Verteron, Altgard and the Abyss."));
 
         panel.Children.Add(Ui.Heading("Account"));
         var name = new TextBox { Text = engine.Profile.Name };

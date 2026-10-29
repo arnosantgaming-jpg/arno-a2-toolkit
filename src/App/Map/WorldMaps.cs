@@ -7,7 +7,8 @@ public sealed record LiveMapView(int Zone, string? Region, float? X, float? Y, b
 /// <summary>World-to-map transform of the bundled region maps: pixel = offset + scale * world
 /// (no flip or rotation), normalized by the full tile span. Calibration is the upstream
 /// SkeeveAN/Aion-DPS-Meter fit (MIT) for the same tiles; zone ids from its zone table.</summary>
-public sealed record WorldMap(string Key, int Tile, int Grid, double Scale, double OffsetX, double OffsetY)
+/// <param name="Background">Colour around the tiles: the sea, or the Abyss's void (the tiles' own edge colour).</param>
+public sealed record WorldMap(string Key, int Tile, int Grid, double Scale, double OffsetX, double OffsetY, string Background = "#0E1A22")
 {
     public double Span => Tile * Grid;
     public (double X, double Y) Normalize(double worldX, double worldY) => ((OffsetX + Scale * worldX) / Span, (OffsetY + Scale * worldY) / Span);
@@ -21,20 +22,32 @@ public static class WorldMaps
     public static IReadOnlyDictionary<string, WorldMap> All { get; } = new Dictionary<string, WorldMap>
     {
         ["verteron"] = new("verteron", 2048, 8, 0.019583509634873143, 8218.937975984913, 8147.450753846877),
-        ["altgard"] = new("altgard", 1024, 8, 0.0098227439264612, 4137.781824319782, 4062.9907075320293)
+        ["altgard"] = new("altgard", 1024, 8, 0.0098227439264612, 4137.781824319782, 4062.9907075320293),
+        // Reshanta (Abyss_Reshanta_A): four tiles in the middle of a 4×4 grid.
+        ["abyss"] = new("abyss", 1024, 4, 0.009878286530741168, 2047.1930445744983, 2056.9061147139305, "#1E272C")
     };
+
+    /// <summary>Maps in the order the full map offers them.</summary>
+    public static string[] Order { get; } = { "verteron", "altgard", "abyss" };
+
+    /// <summary>Maps whose zone ids are not known: recognised only from their pet creatures.</summary>
+    public static IReadOnlySet<string> Unzoned { get; } = new HashSet<string> { "abyss" };
 
     static readonly Lazy<Dictionary<string, ILookup<int, SpawnPoint>>> spawns = new(() => SpawnAtlas.Regions.Where(r => All.ContainsKey(r.Key)).ToDictionary(r => r.Key, r => r.Points.ToLookup(p => p.NpcId)));
 
     /// <summary>The region whose spawn table places these mobs: each mob within 40 m of a
     /// spawn point of its own NPC votes for that region. Used when the zone frame was missed
-    /// (tracker started after login). Null without at least two agreeing mobs.</summary>
-    public static string? Detect(IEnumerable<LiveMob> mobs)
+    /// (tracker started after login), or a map without known zone ids. Null without at least
+    /// two agreeing mobs.</summary>
+    /// <param name="among">Only these maps (null = all).</param>
+    public static string? Detect(IEnumerable<LiveMob> mobs, IReadOnlySet<string>? among = null)
     {
         var votes = new Dictionary<string, int>();
         foreach (var mob in mobs)
             foreach (var (key, table) in spawns.Value)
             {
+                if (among != null && !among.Contains(key))
+                    continue;
                 var map = All[key];
                 var (x, y) = map.Normalize(mob.X, mob.Y);
                 double limit = 40 / map.Metres;

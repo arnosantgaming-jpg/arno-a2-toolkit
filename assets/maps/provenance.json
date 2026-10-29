@@ -3,6 +3,10 @@
   "Revision": "e16d35d4f19e19b03b0cb05ab4a1658bb51102a6",
   "Calibration": "Approximate upstream manual fit. No live player positioning.",
   "Sha256": {
+    "Client/assets/aion2/maps/abyss/1_1.jpg": "f8e651c0e96040ffd39c89efd7a9641291d861e44f057b822a680781d24a3037",
+    "Client/assets/aion2/maps/abyss/1_2.jpg": "3222f424312ab69fe0c4c4ff14c55d27f7d0c415a4476cde6e856db3b143b946",
+    "Client/assets/aion2/maps/abyss/2_1.jpg": "96e54850f294e58cfa2265da2837910173f3d061f23bba025cb605bf12f9e41e",
+    "Client/assets/aion2/maps/abyss/2_2.jpg": "88db03beaad21bda0a0127300c6db456670dd7be034ec4df4dd985ce42a1efde",
     "Client/assets/aion2/maps/altgard/1_2.jpg": "30d7f5f81d4b623d8c471e8cfbd238899a86e8c4868ee9cc73f7c36762830daa",
     "Client/assets/aion2/maps/altgard/1_3.jpg": "e6f703c6d92fcec225577b290167a7ccca502106dd3e52b7be48ada6d57570af",
     "Client/assets/aion2/maps/altgard/1_4.jpg": "85a1bbddc550356d443ca6b17853fb714cfa8a3bfd9d75e81b75c2febe17b540",

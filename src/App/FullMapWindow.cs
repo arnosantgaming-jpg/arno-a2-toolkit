@@ -54,13 +54,13 @@ public sealed class FullMapWindow : Window
         target.SelectionChanged += (_, _) => ChangeTarget();
         pet.SelectionChanged += (_, _) => ChangeTarget();
         side.Children.Add(new TextBlock { Text = "Map", FontSize = 18, Margin = new Thickness(0, 8, 0, 0) });
-        region.ItemsSource = new[] { "Verteron", "Altgard" };
-        region.SelectedIndex = hub.Region == "altgard" ? 1 : 0;
+        region.ItemsSource = WorldMaps.Order.Select(key => SpawnAtlas.Region(key).Name).ToArray();
+        region.SelectedIndex = Math.Max(0, Array.IndexOf(WorldMaps.Order, hub.Region));
         region.SelectionChanged += (_, _) =>
         {
-            if (refreshing)
+            if (refreshing || region.SelectedIndex < 0)
                 return;
-            hub.SetRegion(region.SelectedIndex == 1 ? "altgard" : "verteron");
+            hub.SetRegion(WorldMaps.Order[region.SelectedIndex]);
             canvas.Follow = false;
             canvas.Center = (0.5, 0.5);
         };
@@ -157,7 +157,7 @@ public sealed class FullMapWindow : Window
     void Update()
     {
         refreshing = true;
-        region.SelectedIndex = hub.Region == "altgard" ? 1 : 0;
+        region.SelectedIndex = Math.Max(0, Array.IndexOf(WorldMaps.Order, hub.Region));
         refreshing = false;
         pet.IsVisible = hub.Preferences.Target == "Pet";
         var live = hub.Live;

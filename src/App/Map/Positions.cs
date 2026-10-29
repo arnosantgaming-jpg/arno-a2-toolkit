@@ -80,14 +80,14 @@ public sealed class Positions
     }
 
     /// <summary>The region: from the zone when it has a map, else recognised from the pet
-    /// creatures around (tracker started after the zone message), else unknown.</summary>
+    /// creatures around (tracker started after the zone message, or the Abyss, whose zone
+    /// ids are not known), else unknown.</summary>
     public string? Region()
     {
         if (WorldMaps.RegionOfZone(Zone) is { } known)
             return known;
-        if (Zone != 0)
-            return null; // a zone without a bundled map (an instance)
-        return detected = WorldMaps.Detect(mobs.Values) ?? detected;
+        // In another zone (an instance, or the Abyss) only the maps without zone ids can match.
+        return detected = WorldMaps.Detect(mobs.Values, Zone == 0 ? null : WorldMaps.Unzoned) ?? detected;
     }
 
     public LiveMapView View(DateTimeOffset now)
