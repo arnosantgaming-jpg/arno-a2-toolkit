@@ -14,4 +14,8 @@ Runtime dependencies (desktop app)
   (licenses/NET-LICENSE.txt, licenses/NET-NOTICES.txt).
   libpcap and libcap are provided by the Linux distribution and are not bundled.
 
+Class logos (assets/classes)
+  Supplied by the project owner for private use and not licensed as project code;
+  the GPL grant does not cover them.
+
 Attribution does not establish a license to redistribute game material. See LEGAL.md.

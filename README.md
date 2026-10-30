@@ -17,9 +17,14 @@ account at risk — read [LEGAL.md](LEGAL.md).
 - Hover a row for total damage, hits and the biggest hit. If capture data is lost the
   meter says it is incomplete.
 
-- Rows show each character's name and class, with bars in class colours. A class shows
-  once that character uses a class skill. Players whose spawn the meter did not see
-  (already nearby when it started) show as numbers until they next come into view.
+- Rows show each character's name, class and logo, with bars in class colours. A class
+  shows once that character uses a class skill. The game sends a player's name only as
+  they come into view, so start the meter before you enter a zone: anyone already
+  nearby shows as a number until they next appear.
+- Your own name comes from your login, and is remembered. Started mid-session, the meter
+  finds your row at your first kill. You can set the name under ⚙.
+- Class logos live in `assets/classes/<class>.png`. A class without one, such as
+  Fighter, shows a coloured initial.
 
 Not yet: damage over time is not counted, so classes that rely on it read low. Summons
 show as their own row and are not added to their owner.

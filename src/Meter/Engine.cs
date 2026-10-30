@@ -112,14 +112,20 @@ public sealed class Engine
                 (LocalEntity, Character, Assumed) = (identity.Entity, identity.Name, false);
                 hints.Clear();
                 names[identity.Entity] = identity.Name;
+                if (Settings.Character != identity.Name)
+                {
+                    Settings.Character = identity.Name;
+                    dirty = true;
+                }
+
                 if (identity.Class is { } job)
                     classes[identity.Entity] = job;
                 break;
             case PlayerSeen player:
-                // Ids are reused: a new name means a new character.
-                if (names.TryGetValue(player.Entity, out string? known) && known != player.Name)
-                    classes.Remove(player.Entity);
-                names[player.Entity] = player.Name;
+                Named(player.Entity, player.Name);
+                break;
+            case OwnerNamed owner:
+                Named(owner.Owner, owner.Name);
                 break;
             case SkillHits skill:
                 foreach (var hit in skill.Hits)
@@ -134,6 +140,16 @@ public sealed class Engine
                 Hint(hint.Entity);
                 break;
         }
+    }
+
+    void Named(int entity, string name)
+    {
+        // Ids are reused: a new name means a new character.
+        if (names.TryGetValue(entity, out string? known) && known != name)
+            classes.Remove(entity);
+        names[entity] = name;
+        if (name == Settings.Character)
+            (LocalEntity, Character, Assumed) = (entity, name, false);
     }
 
     // Stat updates and a few other frames name the player's own entity far more often than
@@ -157,6 +173,9 @@ public sealed class Engine
     {
         change(Settings);
         Settings.Normalize();
+        foreach (var (entity, name) in names)
+            if (name == Settings.Character)
+                (LocalEntity, Character, Assumed) = (entity, name, false);
         dirty = true;
     }
 

@@ -11,7 +11,7 @@ public sealed class SettingsWindow : Window
     {
         Title = "Arno's DPS Meter · settings";
         Width = 440;
-        Height = 420;
+        Height = 520;
         Background = Ui.Window;
         var engine = app.Engine;
         var panel = new StackPanel { Spacing = 10, Margin = new Thickness(20) };
@@ -28,6 +28,12 @@ public sealed class SettingsWindow : Window
         row.Children.Add(quiet);
         row.Children.Add(new TextBlock { Text = "A fight ends after seconds without a hit", VerticalAlignment = VerticalAlignment.Center });
         panel.Children.Add(row);
+
+        panel.Children.Add(Ui.Heading("Your character"));
+        var character = new TextBox { Text = engine.Settings.Character, PlaceholderText = "Character name" };
+        character.LostFocus += (_, _) => engine.ChangeSettings(s => s.Character = string.IsNullOrWhiteSpace(character.Text) ? null : character.Text.Trim());
+        panel.Children.Add(character);
+        panel.Children.Add(Ui.Note("Filled in at each login. It marks your row once the game names you, usually at your first kill."));
 
         panel.Children.Add(Ui.Heading("Capture"));
         var captureNote = Ui.Note(app.CaptureStatus);

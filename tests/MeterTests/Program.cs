@@ -66,6 +66,21 @@ var t0 = DateTimeOffset.Parse("2026-10-24T12:00:00Z");
     seen.Closed(1, t0);
     Check(seen.Rows(seen.Damage.Fight).All(r => r.Name == null && r.Class == null), "logging out forgets names");
 
+    var known = new Engine(store: null, new Settings { Character = "Hero" });
+    byte[] Kill(int owner, string who) { var n = Encoding.UTF8.GetBytes(who); return Frame(0x04, 0x8D, Cat(Var(888), I32(0), Var(owner), new byte[] { 0x19, 0x05, (byte)n.Length }, n, new byte[4])); }
+    known.Data(1, Cat(Hit(5200, 11_010_000), Kill(5200, "Hero")), t0);
+    Check(known.LocalEntity == 5200 && known.Character == "Hero" && known.Rows(known.Damage.Fight) is [{ You: true, Name: "Hero", Class: PlayerClass.Gladiator }], "a kill in your saved name finds your row without a login");
+    known.Data(1, Cat(Hit(5300, 14_010_000), Kill(5300, "Friend")), t0);
+    Check(known.LocalEntity == 5200 && known.Rows(known.Damage.Fight).Single(r => r.Actor == 5300) is { You: false, Name: "Friend" }, "someone else's kill names them, not you");
+    var edited = new Engine(store: null, new Settings());
+    edited.Data(1, Cat(Hit(5400, 11_010_000), Kill(5400, "Typed")), t0);
+    Check(edited.LocalEntity == null, "without a saved name no row is yours");
+    edited.ChangeSettings(s => s.Character = "Typed");
+    Check(edited.LocalEntity == 5400, "typing your name finds your row");
+    var login = new Engine(store: null, new Settings());
+    login.Data(1, identity, t0);
+    Check(login.Settings.Character == "Tester", "a login remembers the character");
+
     var hinted = new Engine(store: null, new Settings());
     hinted.Data(1, Enumerable.Range(0, 12).SelectMany(_ => Frame(0x00, 0x8D, Cat(Var(9000), new byte[4]))).ToArray(), t0);
     Check(hinted.LocalEntity == 9000 && hinted.Assumed, "player recognised mid-session from self hints");
@@ -85,6 +100,13 @@ var t0 = DateTimeOffset.Parse("2026-10-24T12:00:00Z");
         Check(new Engine(store).Settings.MeterQuietSeconds == 60, "settings restored");
         File.WriteAllText(Path.Combine(root, "settings.json"), "{broken");
         Check(new Engine(store).Settings.MeterQuietSeconds == 8, "a damaged file falls back to the defaults");
+        File.Delete(Path.Combine(root, "settings.json"));
+        var nested = Path.Combine(root, "share", "arno-dps-meter");
+        Directory.CreateDirectory(Path.Combine(root, "share", "arno-pet-tracker"));
+        File.WriteAllText(Path.Combine(root, "share", "arno-pet-tracker", "data.json"), """{"ActiveProfile":"a","Profiles":[{"Id":"a","Characters":["Hero"]}]}""");
+        Check(new Store(nested).Load().Character == "Hero", "first run takes the character from the pet tracker");
+        File.WriteAllText(Path.Combine(root, "share", "arno-pet-tracker", "data.json"), """{"ActiveProfile":"a","Profiles":[{"Id":"a","Characters":["Hero","Alt"]}]}""");
+        Check(new Store(nested).Load().Character == null, "several characters are not guessed between");
     }
     finally
     {

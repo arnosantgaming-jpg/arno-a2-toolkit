@@ -13,4 +13,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <ProjectReference Include="../Meter/Meter.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="../../assets/classes/*.png" Link="classes/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

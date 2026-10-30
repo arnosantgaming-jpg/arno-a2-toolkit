@@ -15,6 +15,10 @@ public sealed record PlayerSeen(int Entity, string Name) : Message;
 /// <summary>21:36 — zone entered.</summary>
 public sealed record ZoneEntered(int Zone) : Message;
 
+/// <summary>04:8D — a creature's kill and loot went to this player, or a summon's owner.
+/// The game sends it for your own kills, so it names you without a login.</summary>
+public sealed record OwnerNamed(int Target, int Owner, string Name, ushort Server) : Message;
+
 /// <summary>One player skill's damage to one target.</summary>
 public sealed record SkillHit(int Actor, int Target, int Damage, uint Skill);
 
@@ -36,6 +40,7 @@ public static class MessageDecoder
         {
             (0x33, 0x36) => Identity(body),
             (0x44 or 0x45, 0x36) => Player(body),
+            (0x04, 0x8D) => Owner(body),
             (0x21, 0x36) => Zone(body),
             (0x04, 0x38) => Hits(body),
             (0x00, 0x8D) or (0x44, 0x37) or (0x4A, 0x36) or (0x33, 0x8A) => Hint(body),
@@ -63,7 +68,25 @@ public static class MessageDecoder
     static bool Named(ref Reader r, out int entity, [NotNullWhen(true)] out string? name)
     {
         name = null;
-        if (!r.VarInt(out entity) || entity is < 1 or > 9_999_999 || !r.Skip(4) || !r.Byte(out byte flags) || (flags & 1) == 0 || !r.Byte(out byte length) || length is < 1 or > 48 || !r.Bytes(length, out var raw))
+        if (!r.VarInt(out entity) || entity is < 1 or > 9_999_999 || !r.Skip(4) || !r.Byte(out byte flags) || (flags & 1) == 0)
+            return false;
+        return Name(ref r, out name);
+    }
+
+    // target:varint u32 owner:varint server:u16 length:u8 name …
+    static Message? Owner(ReadOnlySpan<byte> body)
+    {
+        var r = new Reader(body);
+        if (!r.VarInt(out int target) || target is < 100 or > 9_999_999 || !r.Skip(4) || !r.VarInt(out int owner) || owner is < 100 or > 9_999_999 || owner == target || !r.U16(out ushort server) || server is < 1000 or >= 3000 || !Name(ref r, out string? name))
+            return null;
+        return new OwnerNamed(target, owner, name, server);
+    }
+
+    // length:u8 name, letters and digits
+    static bool Name(ref Reader r, [NotNullWhen(true)] out string? name)
+    {
+        name = null;
+        if (!r.Byte(out byte length) || length is < 1 or > 48 || !r.Bytes(length, out var raw))
             return false;
         try
         {

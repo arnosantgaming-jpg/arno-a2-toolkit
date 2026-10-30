@@ -1,13 +1,17 @@
 using ArnoA2.Protocol;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 
 namespace ArnoA2.App;
 
 public static class Ui
 {
-    public static readonly IBrush Window = Brush.Parse("#0B1118");
+    public static readonly IBrush Window = Brush.Parse("#070B12");
+    public static readonly IBrush Panel = Brush.Parse("#0C1420");
+    public static readonly IBrush Line = Brush.Parse("#1E3A5F");
     public static readonly IBrush Accent = Brush.Parse("#4FB6FF");
     public static readonly IBrush Title = Brush.Parse("#E1EBFF");
     public static readonly IBrush Rate = Brush.Parse("#CFE9FF");
@@ -30,6 +34,37 @@ public static class Ui
         PlayerClass.Fighter => Color.Parse("#E85D5D"),
         _ => NoClass
     };
+
+    static readonly Dictionary<PlayerClass, Bitmap?> logos = new();
+
+    /// <summary>The class logo from classes/&lt;class&gt;.png, or a coloured disc with the
+    /// class's initial when there is no such file.</summary>
+    public static Control Logo(PlayerClass? job, double size)
+    {
+        if (job is { } known)
+        {
+            if (!logos.TryGetValue(known, out var bitmap))
+            {
+                string path = Path.Combine(AppContext.BaseDirectory, "classes", known.ToString().ToLowerInvariant() + ".png");
+                logos[known] = bitmap = File.Exists(path) ? new Bitmap(path) : null;
+            }
+
+            if (bitmap != null)
+                return new Image { Source = bitmap, Width = size, Height = size };
+        }
+
+        var color = ClassColor(job);
+        return new Border
+        {
+            Width = size,
+            Height = size,
+            CornerRadius = new CornerRadius(size / 2),
+            BorderThickness = new Thickness(1.5),
+            BorderBrush = new SolidColorBrush(color),
+            Background = new SolidColorBrush(color, 0.15),
+            Child = new TextBlock { Text = job is { } named ? named.ToString()[..1] : "?", FontSize = size * 0.5, FontWeight = FontWeight.Bold, Foreground = new SolidColorBrush(color), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+        };
+    }
 
     /// <summary>A bar drawn stronger towards its tip, as those themes do.</summary>
     public static IBrush Bar(Color color) => new LinearGradientBrush
