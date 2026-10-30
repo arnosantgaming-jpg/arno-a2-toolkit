@@ -24,8 +24,9 @@ public sealed class Engine
     readonly Dictionary<int, int> hints = new();
     readonly Dictionary<int, string> names = new();
     readonly Dictionary<int, PlayerClass> classes = new();
+    readonly Dictionary<uint, string> connections = new();
     uint? flow;
-    bool dirty;
+    bool dirty, namesDirty;
     DateTimeOffset clock;
 
     public Engine(Store? store, Settings? initial = null)
@@ -46,8 +47,11 @@ public sealed class Engine
 
     public Connection Connection => flow == null ? Connection.Waiting : LocalEntity == null ? Connection.Identifying : Connection.Live;
 
-    public void Opened(uint id)
+    /// <param name="connection">What identifies the game connection, if known.</param>
+    public void Opened(uint id, string? connection = null)
     {
+        if (connection != null)
+            connections[id] = connection;
         var stream = new FrameStream();
         stream.FrameDecoded += frame => Frame(id, frame);
         streams[id] = stream;
@@ -102,6 +106,7 @@ public sealed class Engine
             if (flow != null && flow != id)
                 Gap(flow.Value, 0, clock);
             flow = id;
+            Restore(id);
         }
 
         if (id != flow)
@@ -142,8 +147,17 @@ public sealed class Engine
         }
     }
 
+    // The meter restarted on a connection it already knew: players in view are not sent again.
+    void Restore(uint id)
+    {
+        if (connections.TryGetValue(id, out string? connection) && store?.LoadNames() is { } saved && saved.Connection == connection)
+            foreach (var (entity, name) in saved.Names)
+                Named(entity, name);
+    }
+
     void Named(int entity, string name)
     {
+        namesDirty |= names.GetValueOrDefault(entity) != name;
         // Ids are reused: a new name means a new character.
         if (names.TryGetValue(entity, out string? known) && known != name)
             classes.Remove(entity);
@@ -181,6 +195,12 @@ public sealed class Engine
 
     public bool SaveIfChanged()
     {
+        if (namesDirty && flow is uint id && connections.TryGetValue(id, out string? connection))
+        {
+            store?.Save(new SavedNames { Connection = connection, Names = new(names) });
+            namesDirty = false;
+        }
+
         if (!dirty)
             return false;
         store?.Save(Settings);

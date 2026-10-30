@@ -13,12 +13,21 @@ public sealed class Settings
     public void Normalize() => MeterQuietSeconds = Math.Clamp(MeterQuietSeconds, 3, 60);
 }
 
+/// <summary>Names the game sent on one connection. It sends a name only as a player comes
+/// into view, and entity ids hold for the connection, so a restart can pick these up.</summary>
+public sealed class SavedNames
+{
+    public string Connection { get; set; } = "";
+    public Dictionary<int, string> Names { get; set; } = new();
+}
+
 /// <summary>Atomic JSON storage in the user's data folder.</summary>
 public sealed class Store(string folder)
 {
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
     public string Folder { get; } = folder;
     string File => Path.Combine(Folder, "settings.json");
+    string NamesFile => Path.Combine(Folder, "names.json");
 
     public static string DefaultFolder() => Path.Combine(Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } home ? home : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"), "arno-dps-meter");
 
@@ -62,11 +71,27 @@ public sealed class Store(string folder)
         return null;
     }
 
-    public void Save(Settings settings)
+    public void Save(Settings settings) => Write(File, settings);
+
+    public void Save(SavedNames names) => Write(NamesFile, names);
+
+    public SavedNames? LoadNames()
+    {
+        try
+        {
+            return System.IO.File.Exists(NamesFile) ? JsonSerializer.Deserialize<SavedNames>(System.IO.File.ReadAllText(NamesFile), Json) : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    void Write<T>(string path, T value)
     {
         Directory.CreateDirectory(Folder);
-        string temp = File + ".tmp";
-        System.IO.File.WriteAllText(temp, JsonSerializer.Serialize(settings, Json));
-        System.IO.File.Move(temp, File, overwrite: true);
+        string temp = path + ".tmp";
+        System.IO.File.WriteAllText(temp, JsonSerializer.Serialize(value, Json));
+        System.IO.File.Move(temp, path, overwrite: true);
     }
 }

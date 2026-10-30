@@ -150,7 +150,7 @@ public sealed class AppState
         switch (record.Kind)
         {
             case ChannelKind.FlowOpened:
-                Engine.Opened(record.Flow);
+                Engine.Opened(record.Flow, record.Text);
                 break;
             case ChannelKind.Data:
                 Engine.Data(record.Flow, record.Payload, now);

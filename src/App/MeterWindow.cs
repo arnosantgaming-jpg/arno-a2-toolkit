@@ -3,6 +3,7 @@ using ArnoA2.Meter;
 using ArnoA2.Protocol;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -11,12 +12,12 @@ namespace ArnoA2.App;
 /// <summary>The always-on-top damage meter: this fight or the whole session, as a table.</summary>
 public sealed class MeterWindow : Window
 {
-    const string Columns = "5,34,1.5*,1.3*,86,86,62,1.2*,50";
+    const string Columns = "5,34,2*,86,86,62,1.4*,50";
     readonly AppState app;
     readonly StackPanel rows = new();
     readonly TextBlock clock = new() { FontSize = 15, FontWeight = FontWeight.SemiBold, Foreground = Ui.Title, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock status = new() { FontSize = 11.5, Foreground = Ui.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 6, 2, 0) };
-    readonly Button fight, session;
+    readonly Border fight, session;
     SettingsWindow? settings;
     bool showSession;
     string rendered = "";
@@ -30,23 +31,31 @@ public sealed class MeterWindow : Window
         MinWidth = 600;
         MinHeight = 200;
         Topmost = true;
+        WindowDecorations = WindowDecorations.None;
         Background = Ui.Window;
 
-        fight = Ui.Button("Fight", () => Show(false), "This fight, or the last one until the next starts");
-        session = Ui.Button("Session", () => Show(true), "Every fight since the last reset");
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        fight = Ui.Flat("Fight", () => Show(false), "This fight, or the last one until the next starts");
+        session = Ui.Flat("Session", () => Show(true), "Every fight since the last reset");
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         actions.Children.Add(clock);
         actions.Children.Add(fight);
         actions.Children.Add(session);
-        actions.Children.Add(Ui.Button("Reset", () =>
+        actions.Children.Add(Ui.Flat("Reset", () =>
         {
             app.Engine.Damage.Reset();
             Refresh();
         }));
-        actions.Children.Add(Ui.Button("⚙", OpenSettings, "Settings"));
+        actions.Children.Add(Ui.Flat("⚙", OpenSettings, "Settings"));
+        actions.Children.Add(Ui.Flat("✕", Close, "Close"));
         clock.Margin = new Thickness(0, 0, 10, 0);
 
-        var header = new DockPanel { Margin = new Thickness(4, 0, 0, 8) };
+        // No window frame: the header moves the window, the corner resizes it.
+        var header = new DockPanel { Margin = new Thickness(4, 0, 0, 8), Background = Brushes.Transparent };
+        header.PointerPressed += (_, e) =>
+        {
+            if (e.Source == header || e.Source is TextBlock { Parent: DockPanel })
+                BeginMoveDrag(e);
+        };
         DockPanel.SetDock(actions, Dock.Right);
         header.Children.Add(actions);
         header.Children.Add(new TextBlock { Text = "DPS METER", FontSize = 18, FontWeight = FontWeight.SemiBold, LetterSpacing = 3, Foreground = Ui.Accent, VerticalAlignment = VerticalAlignment.Center });
@@ -59,11 +68,17 @@ public sealed class MeterWindow : Window
 
         var layout = new DockPanel { Margin = new Thickness(10) };
         DockPanel.SetDock(header, Dock.Top);
-        DockPanel.SetDock(status, Dock.Bottom);
+        var grip = new TextBlock { Text = "◢", FontSize = 11, Foreground = Ui.Muted, Cursor = new Cursor(StandardCursorType.BottomRightCorner), Padding = new Thickness(6, 4, 0, 0) };
+        grip.PointerPressed += (_, e) => BeginResizeDrag(WindowEdge.SouthEast, e);
+        var footer = new DockPanel();
+        DockPanel.SetDock(grip, Dock.Right);
+        footer.Children.Add(grip);
+        footer.Children.Add(status);
+        DockPanel.SetDock(footer, Dock.Bottom);
         layout.Children.Add(header);
-        layout.Children.Add(status);
+        layout.Children.Add(footer);
         layout.Children.Add(new Border { Child = table, Background = Ui.Panel, BorderBrush = Ui.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), ClipToBounds = true });
-        Content = layout;
+        Content = new Border { Child = layout, BorderBrush = Ui.Line, BorderThickness = new Thickness(1) };
 
         app.Changed += Refresh;
         Closed += (_, _) =>
@@ -97,10 +112,8 @@ public sealed class MeterWindow : Window
         var meter = app.Engine.Damage;
         var tally = showSession ? meter.Session : meter.Fight;
         var list = app.Engine.Rows(tally);
-        fight.FontWeight = showSession ? FontWeight.Normal : FontWeight.Bold;
-        session.FontWeight = showSession ? FontWeight.Bold : FontWeight.Normal;
-        fight.BorderBrush = showSession ? null : Ui.Accent;
-        session.BorderBrush = showSession ? Ui.Accent : null;
+        Ui.Select(fight, !showSession);
+        Ui.Select(session, showSession);
 
         string idle = Idle();
         string key = $"{showSession}|{tally.Seconds:F1}|{tally.Incomplete}|{idle}|" + string.Join("|", list.Select(r => $"{r.Actor}:{r.You}:{r.Damage}:{r.Name}:{r.Class}"));
@@ -119,7 +132,7 @@ public sealed class MeterWindow : Window
     static Grid Heading()
     {
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions(Columns), Height = 30, Background = Ui.Window };
-        foreach (var (text, column, right) in new[] { ("#", 1, false), ("PLAYER", 2, false), ("CLASS", 3, false), ("DPS", 4, true), ("TOTAL", 5, true), ("%", 6, true) })
+        foreach (var (text, column, right) in new[] { ("#", 1, false), ("PLAYER", 2, false), ("DPS", 3, true), ("TOTAL", 4, true), ("%", 5, true) })
             grid.Children.Add(Place(new TextBlock { Text = text, FontSize = 11, LetterSpacing = 1, Foreground = Ui.Muted, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = right ? HorizontalAlignment.Right : column == 1 ? HorizontalAlignment.Center : HorizontalAlignment.Left }, column));
         return grid;
     }
@@ -132,16 +145,15 @@ public sealed class MeterWindow : Window
         grid.Children.Add(Place(new Border { Background = row.You ? Ui.Accent : tint }, 0));
         grid.Children.Add(Place(new TextBlock { Text = rank.ToString(CultureInfo.InvariantCulture), FontSize = 14, FontWeight = FontWeight.SemiBold, Foreground = tint, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }, 1));
         grid.Children.Add(Place(Cell(Ui.Logo(row.Class, 24), new TextBlock { Text = row.Name ?? (row.You ? "You" : "Player " + row.Actor), FontSize = 14, FontWeight = row.You ? FontWeight.SemiBold : FontWeight.Normal, Foreground = Ui.Title, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center }), 2));
-        grid.Children.Add(Place(Cell(Ui.Logo(row.Class, 20), new TextBlock { Text = row.Class is { } job ? PlayerClasses.Name(job).ToUpperInvariant() : "—", FontSize = 12, FontWeight = FontWeight.Medium, Foreground = row.Class == null ? Ui.Muted : tint, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center }), 3));
-        grid.Children.Add(Place(Number(Short(row.Dps), 16, FontWeight.Bold, tint), 4));
-        grid.Children.Add(Place(Number(Short(row.Damage), 13, FontWeight.Normal, Ui.Title), 5));
-        grid.Children.Add(Place(Number(row.Share.ToString("P1", CultureInfo.InvariantCulture), 13, FontWeight.Normal, Ui.Title), 6));
+        grid.Children.Add(Place(Number(Short(row.Dps), 16, FontWeight.Bold, tint), 3));
+        grid.Children.Add(Place(Number(Short(row.Damage), 13, FontWeight.Normal, Ui.Title), 4));
+        grid.Children.Add(Place(Number(row.Share.ToString("P1", CultureInfo.InvariantCulture), 13, FontWeight.Normal, Ui.Title), 5));
 
         var fill = new Grid { ColumnDefinitions = new ColumnDefinitions($"{Math.Max(row.Share, 0.001).ToString(CultureInfo.InvariantCulture)}*,{Math.Max(1 - row.Share, 0).ToString(CultureInfo.InvariantCulture)}*") };
         fill.Children.Add(new Border { Background = Ui.Bar(color) });
-        grid.Children.Add(Place(new Border { Background = Ui.Track, Height = 12, Margin = new Thickness(14, 0, 8, 0), Child = fill }, 7));
-        grid.Children.Add(Place(Number(row.Share.ToString("P0", CultureInfo.InvariantCulture), 11.5, FontWeight.Normal, Ui.Muted), 8));
-        ToolTip.SetTip(grid, $"{row.Damage:N0} damage · {row.Hits:N0} hits · biggest {row.Biggest:N0}");
+        grid.Children.Add(Place(new Border { Background = Ui.Track, Height = 12, Margin = new Thickness(14, 0, 8, 0), Child = fill }, 6));
+        grid.Children.Add(Place(Number(row.Share.ToString("P0", CultureInfo.InvariantCulture), 11.5, FontWeight.Normal, Ui.Muted), 7));
+        ToolTip.SetTip(grid, $"{(row.Class is { } job ? PlayerClasses.Name(job) + " · " : "")}{row.Damage:N0} damage · {row.Hits:N0} hits · biggest {row.Biggest:N0}");
         return new Border { Child = grid, BorderBrush = Ui.Line, BorderThickness = new Thickness(0, 0, 0, 1) };
     }
 

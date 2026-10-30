@@ -1,6 +1,7 @@
 using ArnoA2.Protocol;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -81,6 +82,30 @@ public static class Ui
             ToolTip.SetTip(button, tip);
         button.Click += (_, _) => action();
         return button;
+    }
+
+    /// <summary>A button that is only its label until the pointer is over it.</summary>
+    public static Border Flat(string label, Action action, string? tip = null)
+    {
+        var flat = new Border { Padding = new Thickness(10, 4), CornerRadius = new CornerRadius(4), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 13, Foreground = Muted } };
+        if (tip != null)
+            ToolTip.SetTip(flat, tip);
+        flat.PointerEntered += (_, _) => flat.Background = Line;
+        flat.PointerExited += (_, _) => flat.Background = Brushes.Transparent;
+        flat.PointerReleased += (_, e) =>
+        {
+            if (e.InitialPressMouseButton == MouseButton.Left)
+                action();
+        };
+        return flat;
+    }
+
+    /// <summary>Marks a flat button as the current choice.</summary>
+    public static void Select(Border flat, bool selected)
+    {
+        var label = (TextBlock)flat.Child!;
+        label.Foreground = selected ? Accent : Muted;
+        label.FontWeight = selected ? FontWeight.SemiBold : FontWeight.Normal;
     }
 
     public static TextBlock Heading(string text, double size = 18) => new() { Text = text, FontSize = size, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 2) };

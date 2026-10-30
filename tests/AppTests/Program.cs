@@ -63,7 +63,7 @@ engine.Data(1, Cat(Named(0x33, 4242, "Arnaud", Cat(new byte[] { 0xD2, 0x04 }, Bi
 meter.Refresh();
 Save(meter, "meter.png");
 Check(Text(meter).Contains("Arnaud") && Text(meter).Contains("Lumiel") && Text(meter).Contains("Player 9003") && Text(meter).Contains("00:00:06"), "meter shows names, numbers the unknown, and the fight's length");
-Check(Text(meter).Contains("GLADIATOR") && Text(meter).Contains("CLERIC") && Text(meter).Contains("SORCERER"), "meter shows each class it knows");
+Check(meter.GetVisualDescendants().OfType<Image>().Count() == 3, "each known class shows its logo before the name");
 engine.Damage.Reset();
 meter.Refresh();
 Check(Text(meter).Contains("appears here"), "meter empties on reset");

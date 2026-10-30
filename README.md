@@ -14,13 +14,15 @@ account at risk — read [LEGAL.md](LEGAL.md).
 - **Fight:** the current fight, or the last one until the next starts. A fight ends
   after 8 seconds without a hit (change it under ⚙).
 - **Session:** every fight since the last reset. Time between fights is left out.
-- Hover a row for total damage, hits and the biggest hit. If capture data is lost the
+- Drag the header to move the window, the corner to resize it.
+- Hover a row for the class, total damage, hits and the biggest hit. If capture data is lost the
   meter says it is incomplete.
 
 - Rows show each character's name, class and logo, with bars in class colours. A class
   shows once that character uses a class skill. The game sends a player's name only as
-  they come into view, so start the meter before you enter a zone: anyone already
-  nearby shows as a number until they next appear.
+  they come into view, so anyone already nearby when the meter first starts shows as a
+  number until they next appear. Names are kept for the connection, so restarting the
+  meter keeps them.
 - Your own name comes from your login, and is remembered. Started mid-session, the meter
   finds your row at your first kill. You can set the name under ⚙.
 - Class logos live in `assets/classes/<class>.png`. A class without one, such as
