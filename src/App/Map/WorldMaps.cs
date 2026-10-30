@@ -8,7 +8,9 @@ public sealed record LiveMapView(int Zone, string? Region, float? X, float? Y, b
 /// (no flip or rotation), normalized by the full tile span. Calibration is the upstream
 /// SkeeveAN/Aion-DPS-Meter fit (MIT) for the same tiles; zone ids from its zone table.</summary>
 /// <param name="Background">Colour around the tiles: the sea, or the Abyss's void (the tiles' own edge colour).</param>
-public sealed record WorldMap(string Key, int Tile, int Grid, double Scale, double OffsetX, double OffsetY, string Background = "#0E1A22")
+/// <param name="VoidGray">The game's minimap draws this map's void pale grey where the tiles have it dark:
+/// the tiles' void brightness, painted over the minimap's void before matching (null = no void).</param>
+public sealed record WorldMap(string Key, int Tile, int Grid, double Scale, double OffsetX, double OffsetY, string Background = "#0E1A22", float? VoidGray = null)
 {
     public double Span => Tile * Grid;
     public (double X, double Y) Normalize(double worldX, double worldY) => ((OffsetX + Scale * worldX) / Span, (OffsetY + Scale * worldY) / Span);
@@ -24,13 +26,14 @@ public static class WorldMaps
         ["verteron"] = new("verteron", 2048, 8, 0.019583509634873143, 8218.937975984913, 8147.450753846877),
         ["altgard"] = new("altgard", 1024, 8, 0.0098227439264612, 4137.781824319782, 4062.9907075320293),
         // Reshanta (Abyss_Reshanta_A): four tiles in the middle of a 4×4 grid.
-        ["abyss"] = new("abyss", 1024, 4, 0.009878286530741168, 2047.1930445744983, 2056.9061147139305, "#1E272C")
+        ["abyss"] = new("abyss", 1024, 4, 0.009878286530741168, 2047.1930445744983, 2056.9061147139305, "#1E272C", 37)
     };
 
     /// <summary>Maps in the order the full map offers them.</summary>
     public static string[] Order { get; } = { "verteron", "altgard", "abyss" };
 
-    /// <summary>Maps whose zone ids are not known: recognised only from their pet creatures.</summary>
+    /// <summary>Maps that may be entered under zone ids not listed here (the Abyss has several
+    /// layers): recognised from their pet creatures in any zone without a map.</summary>
     public static IReadOnlySet<string> Unzoned { get; } = new HashSet<string> { "abyss" };
 
     static readonly Lazy<Dictionary<string, ILookup<int, SpawnPoint>>> spawns = new(() => SpawnAtlas.Regions.Where(r => All.ContainsKey(r.Key)).ToDictionary(r => r.Key, r => r.Points.ToLookup(p => p.NpcId)));
@@ -64,6 +67,7 @@ public static class WorldMaps
     {
         1010 or 902 => "verteron",
         1110 or 901 => "altgard",
+        20 => "abyss", // Reshanta, seen live on 2026-10-30
         _ => null
     };
 }

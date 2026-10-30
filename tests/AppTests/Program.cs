@@ -277,6 +277,7 @@ Check(Seen(4242, "abyss").Region() == "abyss", "Abyss creatures in a zone withou
 Check(Seen(0, "abyss").Region() == "abyss", "Abyss creatures before any zone message: the Abyss");
 Check(Seen(4242, "verteron").Region() == null, "Verteron creatures in another zone (an instance) do not move the map");
 Check(Seen(1110, "abyss").Region() == "altgard", "a known zone wins over the creatures");
+Check(Seen(20, "verteron").Region() == "abyss", "zone 20 is the Abyss, even with no creatures recognised");
 // Entering it live: an unknown zone, then its creatures come into view.
 state.Positions.Observe(new ZoneEntered(4242, null, null), null, now);
 int abyssEntity = 900000;
@@ -291,6 +292,39 @@ Save(full, "fullmap-abyss.png");
 var regionBox = full.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Items.Contains("Abyss"));
 Check(maps.Region == "abyss" && regionBox.SelectedItem as string == "Abyss" && maps.Spawns.Points.Count > 900, "in the Abyss the full map shows it with its spawns");
 Check(maps.Spawns.Tiles.All(t => File.Exists(Path.Combine(AppContext.BaseDirectory, "maps", "abyss", $"{t.Column}_{t.Row}.jpg"))), "the Abyss tiles are bundled");
+
+// The game's Abyss minimap: the islands on a pale void, at the scale calibrated in Verteron
+// (the Abyss tiles have half the pixels per metre). Made from the tiles themselves.
+var terrain = new ArnoA2.App.Map.TerrainCache(Path.Combine(AppContext.BaseDirectory, "maps"));
+using (var island = SkiaSharp.SKBitmap.Decode(Path.Combine(AppContext.BaseDirectory, "maps", "abyss", "1_2.jpg")))
+{
+    (double X, double Y) truth = (0.4131, 0.5317);
+    double onTile = ArnoA2.App.Map.MinimapMatcher.OnMap(abyss, 2.74);
+    var sky = new byte[219 * 147 * 3];
+    var noise = new Random(3);
+    for (int py = 0; py < 147; py++)
+        for (int px = 0; px < 219; px++)
+        {
+            var c = island.GetPixel((int)(truth.X * abyss.Span - 1024 + (px - 109.5) * onTile), (int)(truth.Y * abyss.Span - 2048 + (py - 73.5) * onTile));
+            int i = (py * 219 + px) * 3, n = noise.Next(12);
+            bool voidPixel = 0.299 * c.Red + 0.587 * c.Green + 0.114 * c.Blue < 50;
+            (sky[i], sky[i + 1], sky[i + 2]) = voidPixel ? ((byte)(140 + n), (byte)(147 + n), (byte)(139 + n)) : (c.Red, c.Green, c.Blue);
+        }
+
+    var found = ArnoA2.App.Map.MinimapMatcher.Locate(terrain, abyss, sky, 219, 147, 0.42, 0.53, 120, 2.74);
+    double off = found == null ? double.MaxValue : Math.Sqrt(Math.Pow(found.X - truth.X, 2) + Math.Pow(found.Y - truth.Y, 2)) * abyss.Metres;
+    Check(off < 4, $"the Abyss minimap is found on the tiles ({off:F1} m off, score {found?.Score:F2})");
+    var dark = ArnoA2.App.Map.MinimapMatcher.Locate(terrain, abyss with { VoidGray = null }, sky, 219, 147, 0.42, 0.53, 120, 2.74);
+    Check(dark == null || Math.Sqrt(Math.Pow(dark.X - truth.X, 2) + Math.Pow(dark.Y - truth.Y, 2)) * abyss.Metres > 20, "without the void repaint the pale void hides the islands (why the Abyss needs it)");
+    // Shown position: halfway toward each close minimap match, a far one taken at once.
+    double metre = 1 / abyss.Metres;
+    maps.AcceptMinimap(new ArnoA2.App.Map.MinimapFix(truth.X, truth.Y, 0.5, 2.74), null, "abyss");
+    maps.AcceptMinimap(new ArnoA2.App.Map.MinimapFix(truth.X + 4 * metre, truth.Y, 0.5, 2.74), null, "abyss");
+    Check(Math.Abs((maps.Player!.Value.X - truth.X) / metre - 2) < 1e-6, "a minimap match 4 m away moves the marker halfway");
+    maps.AcceptMinimap(new ArnoA2.App.Map.MinimapFix(truth.X + 60 * metre, truth.Y, 0.5, 2.74), null, "abyss");
+    Check(Math.Abs((maps.Player!.Value.X - truth.X) / metre - 60) < 1e-6, "a match 58 m away is taken at once");
+    Check(Math.Abs(ArnoA2.App.Map.MinimapMatcher.OnMap(ArnoA2.App.Map.WorldMaps.All["verteron"], 2.74) - 2.74) < 1e-9 && Math.Abs(ArnoA2.App.Map.MinimapMatcher.OnMap(ArnoA2.App.Map.WorldMaps.All["altgard"], 2.74) - 2.74 / 2) < 0.03, "one minimap calibration serves Verteron and, at half the tile pixels per metre, Altgard");
+}
 var (centreX, centreY) = abyss.Normalize(abyss.World(0.5, 0.5).X, abyss.World(0.5, 0.5).Y);
 Check(Math.Abs(centreX - 0.5) < 1e-9 && Math.Abs(centreY - 0.5) < 1e-9, "Abyss map transform round trip");
 Console.WriteLine($"{checks} app checks passed; screenshots in {output}");

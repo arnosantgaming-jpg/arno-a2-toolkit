@@ -141,7 +141,12 @@ public sealed class MapHub
         if (fix != null && region == Region)
         {
             minimapFix = (fix.X, fix.Y, DateTime.UtcNow);
-            Move((fix.X, fix.Y), "Minimap");
+            (double X, double Y) next = (fix.X, fix.Y);
+            // Halfway toward each match while it stays close: single matches wobble by a
+            // couple of metres (icons and the view cone move over the minimap); a jump is taken at once.
+            if (Source == "Minimap" && Player is { } shown && Math.Sqrt(Math.Pow(next.X - shown.X, 2) + Math.Pow(next.Y - shown.Y, 2)) * Map.Metres < 12)
+                next = ((shown.X + next.X) / 2, (shown.Y + next.Y) / 2);
+            Move(next, "Minimap");
         }
 
         Changed?.Invoke();

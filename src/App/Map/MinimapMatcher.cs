@@ -25,13 +25,21 @@ public sealed record MinimapFix(double X, double Y, double Score, double Ratio);
 /// <summary>
 /// Locates the in-game minimap (north-up, centred on the player) on the bundled region
 /// tiles with masked normalized cross-correlation over brightness and gradient. Ratio is
-/// tile pixels per minimap pixel (2.75 at 1080p with the default minimap zoom). Icons, the
+/// tile pixels per minimap pixel on Verteron's tiles (2.75 at 1080p with the default minimap
+/// zoom); maps with coarser tiles (Altgard, the Abyss: half the pixels per metre) scale it, so
+/// one calibration serves every map. Icons, the
 /// range rings, route lines and the view cone are masked out. Coarse search at 1/8 tile
-/// resolution, refined at 1/4: about 2 m precision.
+/// resolution, refined at about 2 m per pixel (1/4 of Verteron's tiles, 1/2 of the coarser
+/// ones) and between pixels by fitting the score peak.
 /// </summary>
 public static class MinimapMatcher
 {
     public const double DefaultRatio = 2.75, MinScore = 0.35;
+    // Verteron's tile pixels per metre, the unit ratios are given in.
+    const double ReferencePixelsPerMetre = 1.9583509634873143;
+
+    /// <summary>Tile pixels per minimap pixel on this map's own tiles.</summary>
+    public static double OnMap(WorldMap map, double ratio) => ratio * map.Span / map.Metres / ReferencePixelsPerMetre;
 
     /// <summary>True where the minimap pixel shows terrain.</summary>
     public static bool Terrain(byte r, byte g, byte b)
@@ -43,8 +51,13 @@ public static class MinimapMatcher
         return !(cyan || white || saturatedBlue);
     }
 
+    /// <summary>True where the minimap pixel shows the Abyss's void: neutral grey-green, where
+    /// the islands are warm brown.</summary>
+    public static bool Void(byte r, byte g, byte b) => r - b < 18 && Math.Abs(r - g) < 18;
+
     /// <summary>Area-average resample of RGB minimap pixels into gray + mask at the target size.</summary>
-    public static (GrayImage Gray, bool[] Mask) Template(byte[] rgb, int width, int height, int targetWidth, int targetHeight)
+    /// <param name="voidGray">When set, void pixels count as this brightness (see <see cref="WorldMap.VoidGray"/>).</param>
+    public static (GrayImage Gray, bool[] Mask) Template(byte[] rgb, int width, int height, int targetWidth, int targetHeight, float? voidGray = null)
     {
         var gray = new GrayImage(targetWidth, targetHeight);
         var mask = new bool[targetWidth * targetHeight];
@@ -63,7 +76,7 @@ public static class MinimapMatcher
                 if (!Terrain(rgb[i], rgb[i + 1], rgb[i + 2]))
                     continue;
                 good++;
-                sum += 0.299 * rgb[i] + 0.587 * rgb[i + 1] + 0.114 * rgb[i + 2];
+                sum += voidGray is float dark && Void(rgb[i], rgb[i + 1], rgb[i + 2]) ? dark : 0.299 * rgb[i] + 0.587 * rgb[i + 1] + 0.114 * rgb[i + 2];
             }
 
             int k = ty * targetWidth + tx;
@@ -115,12 +128,13 @@ public static class MinimapMatcher
         public required double GrayNorm, EdgeNorm;
     }
 
-    static Prepared? Prepare(byte[] rgb, int width, int height, double ratio, int down)
+    static Prepared? Prepare(WorldMap map, byte[] rgb, int width, int height, double ratio, int down)
     {
-        int tw = (int)Math.Round(width * ratio / down), th = (int)Math.Round(height * ratio / down);
+        double scale = OnMap(map, ratio);
+        int tw = (int)Math.Round(width * scale / down), th = (int)Math.Round(height * scale / down);
         if (tw < 12 || th < 8)
             return null;
-        var (gray, mask) = Template(rgb, width, height, tw, th);
+        var (gray, mask) = Template(rgb, width, height, tw, th, map.VoidGray);
         var edge = Gradient(gray);
         var index = new List<int>();
         for (int y = 1; y < th - 1; y++)
@@ -173,14 +187,18 @@ public static class MinimapMatcher
         var coarse = Search(terrain, map, rgb, width, height, cx, cy, radiusMetres, ratio, 8, 1);
         if (coarse == null)
             return null;
-        // Refine at 1/4 within two coarse pixels (8 tile px each).
+        // Refine within two coarse pixels (8 tile px each) at about 2 m per pixel: 1/4 of
+        // Verteron's tiles, 1/2 of tiles with half its pixels per metre (else 4 m steps jitter).
         double coarsePixelMetres = 8 * map.Metres / map.Span;
-        return Search(terrain, map, rgb, width, height, coarse.X, coarse.Y, 2 * coarsePixelMetres, ratio, 4, 1) ?? coarse;
+        int fine = OnMap(map, 1) < 0.75 ? 2 : 4;
+        return Search(terrain, map, rgb, width, height, coarse.X, coarse.Y, 2 * coarsePixelMetres, ratio, fine, 1, peak: true) ?? coarse;
     }
 
-    static MinimapFix? Search(ITerrain terrain, WorldMap map, byte[] rgb, int width, int height, double cx, double cy, double radiusMetres, double ratio, int down, int step)
+    /// <param name="peak">Place the result between pixels, at the top of a parabola through the
+    /// best score and its neighbours.</param>
+    static MinimapFix? Search(ITerrain terrain, WorldMap map, byte[] rgb, int width, int height, double cx, double cy, double radiusMetres, double ratio, int down, int step, bool peak = false)
     {
-        var t = Prepare(rgb, width, height, ratio, down);
+        var t = Prepare(map, rgb, width, height, ratio, down);
         if (t == null)
             return null;
         double pixelsPerMetre = map.Span / map.Metres / down;
@@ -206,7 +224,17 @@ public static class MinimapMatcher
 
         if (best < MinScore)
             return null;
-        double px = (x0 + bx + t.Width / 2.0) * down / map.Span, py = (y0 + by + t.Height / 2.0) * down / map.Span;
+        double Offset(int dx, int dy)
+        {
+            int ax = bx - dx, ay = by - dy, cx2 = bx + dx, cy2 = by + dy;
+            if (Math.Min(ax, ay) < 0 || Math.Max(cx2, cy2) > 2 * radius)
+                return 0;
+            double before = Score(t, gray, edge, ax, ay), after = Score(t, gray, edge, cx2, cy2), curve = before - 2 * best + after;
+            return curve < 0 ? Math.Clamp((before - after) / (2 * curve), -0.5, 0.5) : 0;
+        }
+
+        double fx = peak ? Offset(1, 0) : 0, fy = peak ? Offset(0, 1) : 0;
+        double px = (x0 + bx + fx + t.Width / 2.0) * down / map.Span, py = (y0 + by + fy + t.Height / 2.0) * down / map.Span;
         return new(px, py, best, ratio);
     }
 
