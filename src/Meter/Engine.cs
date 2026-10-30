@@ -22,6 +22,8 @@ public sealed class Engine
     readonly Store? store;
     readonly Dictionary<uint, FrameStream> streams = new();
     readonly Dictionary<int, int> hints = new();
+    readonly Dictionary<int, string> names = new();
+    readonly Dictionary<int, PlayerClass> classes = new();
     uint? flow;
     bool dirty;
     DateTimeOffset clock;
@@ -81,7 +83,13 @@ public sealed class Engine
         Character = null;
         Assumed = false;
         hints.Clear();
+        names.Clear();
+        classes.Clear();
     }
+
+    /// <summary>A tally's rows with each character's name and class, where known.</summary>
+    public IReadOnlyList<MeterRow> Rows(DamageMeter.Tally tally) =>
+        tally.Rows(LocalEntity).Select(r => r with { Name = names.GetValueOrDefault(r.Actor), Class = classes.TryGetValue(r.Actor, out var job) ? job : null }).ToArray();
 
     void Frame(uint id, Frame frame)
     {
@@ -103,10 +111,24 @@ public sealed class Engine
             case CharacterIdentity identity:
                 (LocalEntity, Character, Assumed) = (identity.Entity, identity.Name, false);
                 hints.Clear();
+                names[identity.Entity] = identity.Name;
+                if (identity.Class is { } job)
+                    classes[identity.Entity] = job;
+                break;
+            case PlayerSeen player:
+                // Ids are reused: a new name means a new character.
+                if (names.TryGetValue(player.Entity, out string? known) && known != player.Name)
+                    classes.Remove(player.Entity);
+                names[player.Entity] = player.Name;
                 break;
             case SkillHits skill:
                 foreach (var hit in skill.Hits)
+                {
                     Damage.Hit(hit.Actor, hit.Damage, clock, TimeSpan.FromSeconds(Settings.MeterQuietSeconds));
+                    if (PlayerClasses.FromSkill(hit.Skill) is { } used)
+                        classes[hit.Actor] = used;
+                }
+
                 break;
             case SelfHint hint:
                 Hint(hint.Entity);

@@ -1,5 +1,6 @@
 using System.Text;
 using ArnoA2.Meter;
+using ArnoA2.Protocol;
 
 // Synthetic meter checks (no account data).
 int checks = 0;
@@ -52,6 +53,18 @@ var t0 = DateTimeOffset.Parse("2026-10-24T12:00:00Z");
     Check(e.Connection == Connection.Live && e.Character == "Tester" && e.Damage.Fight.Rows(e.LocalEntity)[0].You, "the row becomes yours once the character is known");
     e.Gap(1, 100, t0.AddSeconds(1));
     Check(e.Damage.Session.Incomplete && e.Gaps == 1, "a capture gap reaches the meter");
+
+    var seen = new Engine(store: null, new Settings());
+    byte[] Spawn(int entity, string who) { var n = Encoding.UTF8.GetBytes(who); return Frame(0x45, 0x36, Cat(Var(entity), I32(0), new byte[] { 7, (byte)n.Length }, n, new byte[9])); }
+    byte[] Hit(int actor, uint skill) => Frame(0x04, 0x38, Cat(Var(777), Var(4), Var(0), Var(actor), BitConverter.GetBytes(skill), new byte[] { 5 }, Var(1), new byte[8], Var(15_000), Var(500), Var(1)));
+    seen.Data(1, Cat(Spawn(5151, "Other"), Hit(5151, 14_010_000), Hit(6000, 13_010_000), Hit(6001, 12_000_000)), t0);
+    var named = seen.Rows(seen.Damage.Fight);
+    Check(named.Single(r => r.Actor == 5151) is { Name: "Other", Class: PlayerClass.Ranger }, "name from the spawn, class from the skill");
+    Check(named.Single(r => r.Actor == 6000) is { Name: null, Class: PlayerClass.Assassin } && named.Single(r => r.Actor == 6001) is { Name: null, Class: null }, "unknowns stay unknown");
+    seen.Data(1, Spawn(5151, "Newcomer"), t0);
+    Check(seen.Rows(seen.Damage.Fight).Single(r => r.Actor == 5151) is { Name: "Newcomer", Class: null }, "a reused id does not keep the old character's class");
+    seen.Closed(1, t0);
+    Check(seen.Rows(seen.Damage.Fight).All(r => r.Name == null && r.Class == null), "logging out forgets names");
 
     var hinted = new Engine(store: null, new Settings());
     hinted.Data(1, Enumerable.Range(0, 12).SelectMany(_ => Frame(0x00, 0x8D, Cat(Var(9000), new byte[4]))).ToArray(), t0);

@@ -67,6 +67,8 @@ static int Meter(string path)
     var quiet = TimeSpan.FromSeconds(new Settings().MeterQuietSeconds);
     int? local = null;
     int hits = 0, unread = 0, fights = 0;
+    var players = new HashSet<int>();
+    var jobs = new Dictionary<int, PlayerClass>();
     DateTimeOffset now = default;
     foreach (var chunk in Recording.Read(path))
     {
@@ -86,11 +88,21 @@ static int Meter(string path)
             {
                 var message = MessageDecoder.Decode(frame);
                 if (message is CharacterIdentity identity)
+                {
                     local = identity.Entity;
+                    players.Add(identity.Entity);
+                    if (identity.Class is { } own)
+                        jobs[identity.Entity] = own;
+                }
+
+                if (message is PlayerSeen seen)
+                    players.Add(seen.Entity);
                 if (message is SkillHits skill)
                 {
                     foreach (var hit in skill.Hits)
                     {
+                        if (PlayerClasses.FromSkill(hit.Skill) is { } used)
+                            jobs[hit.Actor] = used;
                         hits++;
                         fights += meter.Fight.Empty || meter.Fight.Quiet(now, quiet) ? 1 : 0;
                         meter.Hit(hit.Actor, hit.Damage, now, quiet);
@@ -105,7 +117,8 @@ static int Meter(string path)
     }
 
     Console.WriteLine($"{hits} hits read, {unread} hit frames not read, {fights} fights, {meter.Session.Seconds:F1} s in combat{(meter.Session.Incomplete ? ", incomplete" : "")}");
+    Console.WriteLine($"{players.Count} player names seen");
     foreach (var row in meter.Session.Rows(local))
-        Console.WriteLine($"  {(row.You ? "you" : "other"),-6} {row.Damage,12:N0} damage {row.Dps,10:N0}/s {row.Hits,6} hits, biggest {row.Biggest:N0}");
+        Console.WriteLine($"  {(row.You ? "you" : "other"),-6} {(jobs.TryGetValue(row.Actor, out var job) ? PlayerClasses.Name(job) : "class ?"),-13} {(players.Contains(row.Actor) ? "named" : "no name"),-8} {row.Damage,12:N0} damage {row.Dps,10:N0}/s {row.Hits,6} hits, biggest {row.Biggest:N0}");
     return 0;
 }

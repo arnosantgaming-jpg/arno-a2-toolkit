@@ -128,6 +128,13 @@ List<Frame> Split(params byte[][] chunks)
     Check(identity is CharacterIdentity { Entity: 4242, Name: "Tester", Server: 1234 }, "identity");
     Check(Decode(0x33, 0x36, Cat(Var(4242), I32(0), new byte[] { 6, 3 }, "abc"u8.ToArray(), new byte[2])) == null, "identity without name flag rejected");
 
+    Check(Decode(0x33, 0x36, Cat(Var(4242), I32(0), new byte[] { 7, (byte)name.Length }, name, new byte[] { 0xD2, 0x04 }, I32(30), new byte[20])) is CharacterIdentity { Class: PlayerClass.Cleric }, "identity carries the class");
+    Check(Decode(0x45, 0x36, Cat(Var(5151), I32(0), new byte[] { 7, (byte)name.Length }, name, new byte[9])) is PlayerSeen { Entity: 5151, Name: "Tester" }, "another player's name");
+    Check(Decode(0x44, 0x36, Cat(Var(5151), I32(0), new byte[] { 6, 3 }, "abc"u8.ToArray())) == null, "a record without its name flag is not a player");
+    Check(PlayerClasses.FromRoster(7) == PlayerClass.Gladiator && PlayerClasses.FromRoster(36) == PlayerClass.Chanter && PlayerClasses.FromRoster(99) == null, "roster classes");
+    Check(PlayerClasses.FromSkill(13_450_000) == PlayerClass.Assassin && PlayerClasses.FromSkill(14_010_000) == PlayerClass.Ranger && PlayerClasses.FromSkill(19_010_000) == PlayerClass.Fighter, "class from skill ids");
+    Check(PlayerClasses.FromSkill(12_000_000) == null && PlayerClasses.FromSkill(16_500_000) == null && PlayerClasses.FromSkill(16_010_000) == PlayerClass.Spiritmaster && PlayerClasses.FromSkill(100_600) == PlayerClass.Spiritmaster, "generic and spirit-only skills do not name a class");
+
     Check(Decode(0x21, 0x36, Cat(I32(1), I32(1010), new byte[8])) is ZoneEntered { Zone: 1010 }, "zone");
 
     Check(Decode(0x00, 0x8D, Cat(Var(4242), new byte[6])) is SelfHint { Entity: 4242 }, "self hint");

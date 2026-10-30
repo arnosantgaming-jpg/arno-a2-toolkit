@@ -1,6 +1,6 @@
 ARNO'S DPS METER — THIRD-PARTY NOTICES
 
-Overlay window rule approach and skill hit layout
+Overlay window rule approach, message layouts and class colours
   Following taengu/A2Tools-DPS-Meter (GPL-3.0),
   https://github.com/taengu/A2Tools-DPS-Meter. No code from that project is
   included; rule keys are KWin's own.

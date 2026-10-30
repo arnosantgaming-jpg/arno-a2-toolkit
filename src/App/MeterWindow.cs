@@ -1,8 +1,10 @@
 using System.Globalization;
 using ArnoA2.Meter;
+using ArnoA2.Protocol;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Controls.Documents;
 using Avalonia.Media;
 
 namespace ArnoA2.App;
@@ -81,13 +83,13 @@ public sealed class MeterWindow : Window
     {
         var meter = app.Engine.Damage;
         var tally = showSession ? meter.Session : meter.Fight;
-        var list = tally.Rows(app.Engine.LocalEntity);
+        var list = app.Engine.Rows(tally);
         fight.FontWeight = showSession ? FontWeight.Normal : FontWeight.Bold;
         session.FontWeight = showSession ? FontWeight.Bold : FontWeight.Normal;
-        fight.BorderBrush = showSession ? null : Ui.Gold;
-        session.BorderBrush = showSession ? Ui.Gold : null;
+        fight.BorderBrush = showSession ? null : Ui.Accent;
+        session.BorderBrush = showSession ? Ui.Accent : null;
 
-        string key = $"{showSession}|{tally.Seconds:F1}|{tally.Incomplete}|{Idle()}|" + string.Join("|", list.Select(r => $"{r.Actor}:{r.You}:{r.Damage}"));
+        string key = $"{showSession}|{tally.Seconds:F1}|{tally.Incomplete}|{Idle()}|" + string.Join("|", list.Select(r => $"{r.Actor}:{r.You}:{r.Damage}:{r.Name}:{r.Class}"));
         if (key == rendered)
             return;
         rendered = key;
@@ -104,18 +106,27 @@ public sealed class MeterWindow : Window
     static Control Row(MeterRow row, long top)
     {
         var text = new DockPanel();
-        var rate = new TextBlock { Text = $"{Short(row.Dps)}/s · {row.Share:P0}", FontSize = 12, Foreground = Ui.Muted };
+        var rate = new TextBlock { Text = $"{Short(row.Dps)}/s · {row.Share:P0}", FontSize = 12, Foreground = Ui.Rate };
         DockPanel.SetDock(rate, Dock.Right);
         text.Children.Add(rate);
-        text.Children.Add(new TextBlock { Text = row.You ? "You" : "Player " + row.Actor, FontSize = 12.5, FontWeight = row.You ? FontWeight.SemiBold : FontWeight.Normal, Foreground = row.You ? Ui.Bright : Brushes.White });
+        var color = Ui.ClassColor(row.Class);
+        var who = new TextBlock { FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis };
+        who.Inlines = new InlineCollection
+        {
+            new Run(row.Name ?? (row.You ? "You" : "Player " + row.Actor)) { FontWeight = row.You ? FontWeight.SemiBold : FontWeight.Normal, Foreground = Ui.Title }
+        };
+        if (row.Class is { } job)
+            who.Inlines.Add(new Run("  " + PlayerClasses.Name(job)) { FontSize = 11, Foreground = new SolidColorBrush(color) });
+        text.Children.Add(who);
 
         var bar = new Grid { ColumnDefinitions = new ColumnDefinitions($"{Math.Max(row.Damage, 1)}*,{Math.Max(top - row.Damage, 0)}*"), Height = 5 };
-        bar.Children.Add(new Border { Background = row.You ? Ui.Gold : Ui.Muted, CornerRadius = new CornerRadius(2) });
+        bar.Children.Add(new Border { Background = Ui.Bar(color), CornerRadius = new CornerRadius(2) });
         var panel = new StackPanel { Spacing = 3 };
         panel.Children.Add(text);
         panel.Children.Add(new Border { Background = Ui.Track, CornerRadius = new CornerRadius(2), Child = bar });
         ToolTip.SetTip(panel, $"{row.Damage:N0} damage · {row.Hits:N0} hits · biggest {row.Biggest:N0}");
-        return panel;
+        // The rail marks your row; the bar keeps your class colour like everyone else's.
+        return new Border { Child = panel, BorderBrush = row.You ? Ui.Accent : null, BorderThickness = new Thickness(row.You ? 3 : 0, 0, 0, 0), Padding = new Thickness(row.You ? 6 : 9, 0, 0, 0) };
     }
 
     static string Clock(double seconds) => $"{(int)seconds / 60}:{(int)seconds % 60:00}";

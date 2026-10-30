@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace ArnoA2.Protocol;
@@ -6,13 +7,16 @@ namespace ArnoA2.Protocol;
 public abstract record Message;
 
 /// <summary>33:36 — the logged-in character (sent at login and zone entry).</summary>
-public sealed record CharacterIdentity(int Entity, string Name, ushort Server) : Message;
+public sealed record CharacterIdentity(int Entity, string Name, ushort Server, PlayerClass? Class = null) : Message;
+
+/// <summary>44:36 / 45:36 — another player came into view.</summary>
+public sealed record PlayerSeen(int Entity, string Name) : Message;
 
 /// <summary>21:36 — zone entered.</summary>
 public sealed record ZoneEntered(int Zone) : Message;
 
 /// <summary>One player skill's damage to one target.</summary>
-public sealed record SkillHit(int Actor, int Target, int Damage);
+public sealed record SkillHit(int Actor, int Target, int Damage, uint Skill);
 
 /// <summary>04:38 — a player skill hit one target, or several for an area skill.</summary>
 public sealed record SkillHits(IReadOnlyList<SkillHit> Hits) : Message;
@@ -31,6 +35,7 @@ public static class MessageDecoder
         return (frame.Op, frame.Family) switch
         {
             (0x33, 0x36) => Identity(body),
+            (0x44 or 0x45, 0x36) => Player(body),
             (0x21, 0x36) => Zone(body),
             (0x04, 0x38) => Hits(body),
             (0x00, 0x8D) or (0x44, 0x37) or (0x4A, 0x36) or (0x33, 0x8A) => Hint(body),
@@ -42,21 +47,34 @@ public static class MessageDecoder
     static Message? Identity(ReadOnlySpan<byte> body)
     {
         var r = new Reader(body);
-        if (!r.VarInt(out int entity) || entity is < 1 or > 9_999_999 || !r.Skip(4) || !r.Byte(out byte flags) || (flags & 1) == 0 || !r.Byte(out byte length) || length is < 1 or > 48 || !r.Bytes(length, out var raw) || !r.U16(out ushort server))
+        if (!Named(ref r, out int entity, out string? name) || !r.U16(out ushort server))
             return null;
-        string name;
+        // The class need not be there: some characters have other bytes in its place.
+        return new CharacterIdentity(entity, name, server, r.U32(out uint job) ? PlayerClasses.FromRoster(job) : null);
+    }
+
+    static Message? Player(ReadOnlySpan<byte> body)
+    {
+        var r = new Reader(body);
+        return Named(ref r, out int entity, out string? name) ? new PlayerSeen(entity, name) : null;
+    }
+
+    // entity:varint u32 flags:u8 [flags & 1: length:u8 name]
+    static bool Named(ref Reader r, out int entity, [NotNullWhen(true)] out string? name)
+    {
+        name = null;
+        if (!r.VarInt(out entity) || entity is < 1 or > 9_999_999 || !r.Skip(4) || !r.Byte(out byte flags) || (flags & 1) == 0 || !r.Byte(out byte length) || length is < 1 or > 48 || !r.Bytes(length, out var raw))
+            return false;
         try
         {
             name = StrictUtf8.GetString(raw);
         }
         catch (DecoderFallbackException)
         {
-            return null;
+            return false;
         }
 
-        if (name.Length > 12 || !name.Any(char.IsLetter) || !name.All(c => char.IsLetterOrDigit(c) || c is '\'' or '-' or '_'))
-            return null;
-        return new CharacterIdentity(entity, name, server);
+        return name.Length <= 12 && name.Any(char.IsLetter) && name.All(c => char.IsLetterOrDigit(c) || c is '\'' or '-' or '_');
     }
 
     // counter:u32 zone:i32 …
@@ -83,7 +101,7 @@ public static class MessageDecoder
                 break;
             if (!r.VarInt(out int target) || target <= 0 || !r.VarInt(out int flags) || (flags & 15) is < 4 or > 7 || !r.VarInt(out _) || !r.VarInt(out int actor) || actor <= 0 || !r.U32(out uint skill))
                 break;
-            if (skill is not ((>= 10_000_000 and < 300_000_000) or (>= 3_000_000 and < 3_100_000)) || !r.Skip(1) || !r.VarInt(out _))
+            if (skill is not ((>= 10_000_000 and < 300_000_000) or (>= 3_000_000 and < 3_100_000) or (>= 100_510 and <= 103_500) or (>= 109_300 and <= 109_362)) || !r.Skip(1) || !r.VarInt(out _))
                 break;
             int layout = flags & 15;
             int size = layout switch
@@ -103,7 +121,7 @@ public static class MessageDecoder
                 damage = shifted;
             // Hitting oneself is a heal.
             if (actor != target && damage is > 0 and < 100_000_000)
-                hits.Add(new SkillHit(actor, target, damage));
+                hits.Add(new SkillHit(actor, target, damage, skill));
             if (!Tail(ref r, flags, damage))
                 break;
         }

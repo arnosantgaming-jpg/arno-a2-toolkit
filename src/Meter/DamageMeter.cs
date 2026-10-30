@@ -1,6 +1,13 @@
+using ArnoA2.Protocol;
+
 namespace ArnoA2.Meter;
 
-public sealed record MeterRow(int Actor, bool You, long Damage, int Hits, int Biggest, double Dps, double Share);
+public sealed record MeterRow(int Actor, bool You, long Damage, int Hits, int Biggest, double Dps, double Share)
+{
+    /// <summary>The character's name, once the game has sent it.</summary>
+    public string? Name { get; init; }
+    public PlayerClass? Class { get; init; }
+}
 
 /// <summary>
 /// Damage per character, from the skill hits the game sends. A fight starts with the first

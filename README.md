@@ -17,8 +17,12 @@ account at risk — read [LEGAL.md](LEGAL.md).
 - Hover a row for total damage, hits and the biggest hit. If capture data is lost the
   meter says it is incomplete.
 
-Not yet: damage over time is not counted, so classes that rely on it read low. Other
-characters and summons show as numbered players, and a summon is not added to its owner.
+- Rows show each character's name and class, with bars in class colours. A class shows
+  once that character uses a class skill. Players whose spawn the meter did not see
+  (already nearby when it started) show as numbers until they next come into view.
+
+Not yet: damage over time is not counted, so classes that rely on it read low. Summons
+show as their own row and are not added to their owner.
 
 ## Install (CachyOS / Arch)
 
@@ -72,7 +76,8 @@ work as reference:
 - **[0Fox2Give/PetTracker](https://github.com/0Fox2Give/PetTracker)** (GPL-3.0) —
   framing and identity message layouts.
 - **[taengu/A2Tools-DPS-Meter](https://github.com/taengu/A2Tools-DPS-Meter)** (GPL-3.0)
-  — the skill hit layout, and the KDE window-rule approach for overlays above
+  — the skill hit, player name and class layouts, the class colours, and the KDE
+  window-rule approach for overlays above
   fullscreen games.
 
 Details: [NOTICE](NOTICE) and [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).

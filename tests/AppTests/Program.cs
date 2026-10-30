@@ -23,7 +23,7 @@ void Check(bool ok, string what)
         throw new Exception("FAILED: " + what);
 }
 
-string Text(Control c) => string.Join("\n", c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+string Text(Control c) => string.Join("\n", c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Inlines is { Count: > 0 } runs ? runs.Text : t.Text));
 void Save(Window w, string name)
 {
     for (int i = 0; i < 3; i++)
@@ -40,12 +40,32 @@ meter.Show();
 Check(Text(meter).Contains(state.CaptureStatus), "before the game starts the meter says what it is waiting for");
 foreach (var (actor, damage, seconds) in new[] { (4242, 18_400, 0), (9001, 12_100, 1), (4242, 22_750, 3), (9002, 6_300, 4), (4242, 19_900, 6) })
     engine.Damage.Hit(actor, damage, now.AddSeconds(seconds), TimeSpan.FromSeconds(8));
+static byte[] Var(int value)
+{
+    var bytes = new List<byte>();
+    uint v = (uint)value;
+    do
+    {
+        byte b = (byte)(v & 0x7f);
+        v >>= 7;
+        bytes.Add(v != 0 ? (byte)(b | 0x80) : b);
+    }
+    while (v != 0);
+    return bytes.ToArray();
+}
+
+static byte[] Cat(params byte[][] parts) => parts.SelectMany(p => p).ToArray();
+static byte[] Frame(byte op, byte family, byte[] body) => Cat(Var(body.Length + 6), new[] { op, family }, body);
+static byte[] Named(byte op, int entity, string name, byte[] rest) => Frame(op, 0x36, Cat(Var(entity), new byte[] { 0, 0, 0, 0, 7, (byte)name.Length }, System.Text.Encoding.UTF8.GetBytes(name), rest));
+static byte[] Hit(int actor, uint skill, int damage) => Frame(0x04, 0x38, Cat(Var(777), Var(4), Var(0), Var(actor), BitConverter.GetBytes(skill), new byte[] { 5 }, Var(1), new byte[8], Var(15_000), Var(damage), Var(1)));
+engine.Data(1, Cat(Named(0x33, 4242, "Arnaud", Cat(new byte[] { 0xD2, 0x04 }, BitConverter.GetBytes(7), new byte[20])), Named(0x45, 9001, "Lumiel", new byte[9]), Hit(9001, 17_010_000, 2_000), Hit(9002, 15_010_000, 1_000), Hit(9003, 12_000_000, 500)), now);
 meter.Refresh();
 Save(meter, "meter.png");
-Check(Text(meter).Contains("Player 9001") && Text(meter).Contains("0:06 in combat"), "meter ranks everyone by damage and shows the fight's length");
+Check(Text(meter).Contains("Arnaud") && Text(meter).Contains("Lumiel") && Text(meter).Contains("Player 9003") && Text(meter).Contains("0:06 in combat"), "meter shows names, numbers the unknown, and the fight's length");
+Check(Text(meter).Contains("Gladiator") && Text(meter).Contains("Cleric") && Text(meter).Contains("Sorcerer"), "meter shows each class it knows");
 engine.Damage.Reset();
 meter.Refresh();
-Check(Text(meter).Contains(state.CaptureStatus), "meter empties on reset");
+Check(Text(meter).Contains("appears here"), "meter empties on reset");
 
 var settings = new SettingsWindow(state);
 settings.Show();
