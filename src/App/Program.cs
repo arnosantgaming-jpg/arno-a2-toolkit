@@ -27,7 +27,9 @@ internal static class Program
         }
 
         using (instance)
-            return AppBuilder.Configure<App>().UsePlatformDetect().StartWithClassicDesktopLifetime(args);
+            // Drawn on the CPU: these small windows gain nothing from the GPU, and sharing the
+            // NVIDIA driver with a running game crashes inside it.
+            return AppBuilder.Configure<App>().UsePlatformDetect().With(new X11PlatformOptions { RenderingMode = new[] { X11RenderingMode.Software } }).StartWithClassicDesktopLifetime(args);
     }
 }
 
