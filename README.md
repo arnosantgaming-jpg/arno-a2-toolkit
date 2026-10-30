@@ -96,7 +96,8 @@ work as reference:
 - **[SkeeveAN/Aion-DPS-Meter](https://github.com/SkeeveAN/Aion-DPS-Meter)** (MIT) —
   position, zone and movement layouts, map tiles, spawn data and map calibration.
 - **[taengu/A2Tools-DPS-Meter](https://github.com/taengu/A2Tools-DPS-Meter)** (GPL-3.0)
-  — the KDE window-rule approach for overlays above fullscreen games.
+  — the skill hit layout, and the KDE window-rule approach for overlays above
+  fullscreen games.
 
 Details: [NOTICE](NOTICE) and [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
 Game names and art belong to NCSOFT.

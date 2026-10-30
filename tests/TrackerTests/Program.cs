@@ -78,7 +78,7 @@ Engine NewEngine(SavedState? state = null) => new(store: null, initial: state ??
     Check(e.Profile.Characters.Contains("Tester"), "new character joins the account");
 
     var appear = Frame(0x41, 0x36, Cat(Var(777), new byte[] { 0x0C, 0, 0 }, I32(npc), new byte[] { 0, 2 }, new byte[8]));
-    var hit = Frame(0x04, 0x38, Cat(Var(777), Var(4), Var(0), Var(4242), BitConverter.GetBytes(12_000_000u), Var(1), new byte[8], Var(0), Var(500)));
+    var hit = Frame(0x04, 0x38, Cat(Var(777), Var(4), Var(0), Var(4242), BitConverter.GetBytes(12_000_000u), new byte[] { 0x92 }, Var(1), new byte[8], Var(15_000), Var(500), Var(1)));
     var death = Frame(0x42, 0x36, Cat(Var(777), new byte[] { 0, 3 }));
     e.Data(1, Cat(appear, hit, death), t0.AddSeconds(5));
     Check(e.Session.Kills == 1 && e.KillsFor(dratona) == 1 && e.Recent.Rows[0].Creature.Length > 0, "kill counted when the player hit the creature");
@@ -97,6 +97,22 @@ Engine NewEngine(SavedState? state = null) => new(store: null, initial: state ??
     var hints = Enumerable.Range(0, 12).SelectMany(_ => Frame(0x00, 0x8D, Cat(Var(9000), new byte[4]))).ToArray();
     hinted.Data(1, hints, t0);
     Check(hinted.LocalEntity == 9000 && hinted.Assumed && hinted.Connection == ArnoA2.Tracker.Connection.Unsynced, "player recognised mid-session from self hints");
+}
+
+// --- Skill hits, in the layouts the game sends ------------------------------------------
+{
+    IReadOnlyList<SkillHit>? Read(params byte[][] parts) => (MessageDecoder.Decode(new Frame(0x04, 0x38, Cat(parts)), _ => true, t0) as SkillHits)?.Hits;
+    byte[] Head(int target, int layout, int actor, uint skill, byte uid = 0x05) => Cat(Var(target), Var(layout), Var(0), Var(actor), BitConverter.GetBytes(skill), new[] { uid }, Var(1));
+    Check(Read(Head(7, 4, 8, 12_000_000u, uid: 0x92), new byte[8], Var(15_000), Var(500), Var(1)) is [{ Actor: 8, Target: 7, Damage: 500 }], "uid byte above 127 does not hide the hit type");
+    Check(Read(Head(7, 4, 8, 12_000_000u), new byte[8], Var(15_000), Var(900), Var(1)) is [{ Damage: 900 }], "uid byte below 128 keeps the damage aligned");
+    Check(Read(Head(7, 4, 8, 12_000_000u), new byte[8], Var(0), Var(15_000), Var(60_876), Var(1)) is [{ Damage: 60_876 }], "a zero pad moves the damage past the power value");
+    Check(Read(Head(7, 6, 8, 12_000_000u), new byte[] { 4 }, Var(300), new byte[8], Var(15_000), Var(700)) is [{ Damage: 700 }], "layout 6 with a two-byte restoration value");
+    Check(Read(Head(7, 5, 8, 12_000_000u), new byte[12], Var(15_000), Var(650)) is [{ Damage: 650 }], "layout 5");
+    Check(Read(Head(7, 0x24, 8, 12_000_000u), new byte[8], Var(15_000), Var(1_000), Var(1), Var(2), Var(100), Var(200)) is [{ Damage: 1_000 }], "additional hits are already in the damage");
+    Check(Read(Head(7, 4, 8, 12_000_000u), new byte[8], Var(15_000), Var(100), Var(1), new byte[] { 1, 0 }, Head(9, 4, 8, 12_000_000u), new byte[8], Var(15_000), Var(200), Var(1)) is [{ Target: 7, Damage: 100 }, { Target: 9, Damage: 200 }], "an area skill's chained targets are all read");
+    Check(Read(Head(7, 4, 8, 1_500_000u), new byte[8], Var(15_000), Var(100), Var(1)) == null, "a creature's skill is not player damage");
+    Check(Read(Head(8, 4, 8, 12_000_000u), new byte[8], Var(15_000), Var(100), Var(1)) == null, "hitting oneself is a heal, not damage");
+    Check(Read(Head(7, 2, 8, 12_000_000u)) == null, "a miss carries no damage");
 }
 
 // --- Rows, pins, merchant -----------------------------------------------------------

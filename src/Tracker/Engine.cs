@@ -209,8 +209,9 @@ public sealed class Engine
             case PositionReport report:
                 World.Seen(report.Entity, now);
                 break;
-            case SkillHit hit when LocalEntity is int local:
-                World.Hit(hit.Actor, hit.Target, local, now);
+            case SkillHits skill when LocalEntity is int local:
+                foreach (var hit in skill.Hits)
+                    World.Hit(hit.Actor, hit.Target, local, now);
                 break;
             case EntityRemoved removed:
                 if (World.Removed(removed.Entity, removed.Died) is { } kill && LocalEntity != null)

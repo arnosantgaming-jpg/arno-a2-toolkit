@@ -23,7 +23,7 @@ Pet portraits (assets/portraits) and family crystal icons (assets/crystals)
   https://aion2petguide.com/guides/soul-crystal-farm (attributed there to
   https://aion2guidance.com/), converted losslessly from WebP to PNG.
 
-Overlay window rule approach
+Overlay window rule approach and skill hit layout
   Following taengu/A2Tools-DPS-Meter (GPL-3.0),
   https://github.com/taengu/A2Tools-DPS-Meter. No code from that project is
   included; rule keys are KWin's own.
