@@ -1,0 +1,20 @@
+Arno's DPS Meter
+Copyright (C) 2026 arnosantgaming-jpg and contributors
+
+This program's code, tests and tooling are licensed under the GNU General Public
+License version 3 only (SPDX: GPL-3.0-only). See LICENSE for the full terms.
+Provided without warranty.
+
+This is an independent Linux-first program. The game message formats it reads were
+worked out by others, and its code was written with their work as reference:
+
+  - Pet Tracker by 0Fox2Give (https://github.com/0Fox2Give/PetTracker), GPL-3.0-only:
+    framing and identity message layouts.
+  - A2Tools-DPS-Meter by taengu (https://github.com/taengu/A2Tools-DPS-Meter), GPL-3.0:
+    the skill hit, player name and class layouts, the class colours and the KDE
+    window-rule approach for overlays above fullscreen games (no code copied).
+
+The capture, framing and decoding code is shared with Arno's Pet Tracker.
+
+The GPL grant covers this project's code. It does not cover game names or other game
+material; see THIRD-PARTY-NOTICES.txt and LEGAL.md.

@@ -1,0 +1,21 @@
+ARNO'S DPS METER — THIRD-PARTY NOTICES
+
+Overlay window rule approach, message layouts and class colours
+  Following taengu/A2Tools-DPS-Meter (GPL-3.0),
+  https://github.com/taengu/A2Tools-DPS-Meter. No code from that project is
+  included; rule keys are KWin's own.
+
+Runtime dependencies (desktop app)
+  Avalonia — MIT (licenses/Avalonia-MIT.txt); MicroCom.Runtime — MIT
+  (licenses/MicroCom-MIT.txt); Tmds.DBus.Protocol — MIT (licenses/Tmds.DBus-MIT.txt);
+  SkiaSharp and HarfBuzzSharp — MIT with native component notices
+  (licenses/SkiaSharp-MIT.txt, licenses/HarfBuzzSharp-MIT.txt,
+  licenses/Skia-HarfBuzz-NOTICES.txt); .NET runtime — MIT with third-party notices
+  (licenses/NET-LICENSE.txt, licenses/NET-NOTICES.txt).
+  libpcap and libcap are provided by the Linux distribution and are not bundled.
+
+Class logos (assets/classes)
+  Supplied by the project owner for private use and not licensed as project code;
+  the GPL grant does not cover them.
+
+Attribution does not establish a license to redistribute game material. See LEGAL.md.
