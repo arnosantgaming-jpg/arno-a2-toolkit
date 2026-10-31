@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ArnoA2.Protocol;
 
 namespace ArnoA2.Meter;
 
@@ -10,7 +11,21 @@ public sealed class Settings
     /// game names you, without seeing a login.</summary>
     public string? Character { get; set; }
 
-    public void Normalize() => MeterQuietSeconds = Math.Clamp(MeterQuietSeconds, 3, 60);
+    /// <summary>How solid the meter's background is, in percent. Text and bars stay solid.</summary>
+    public int MeterOpacity { get; set; } = 50;
+    /// <summary>Count only damage to bosses while a boss is being fought.</summary>
+    public bool MeterBossOnly { get; set; } = true;
+    /// <summary>Where the meter was left, in screen pixels.</summary>
+    public int? MeterX { get; set; }
+    public int? MeterY { get; set; }
+    public double? MeterWidth { get; set; }
+    public double? MeterHeight { get; set; }
+
+    public void Normalize()
+    {
+        MeterQuietSeconds = Math.Clamp(MeterQuietSeconds, 3, 60);
+        MeterOpacity = Math.Clamp(MeterOpacity, 20, 100);
+    }
 }
 
 /// <summary>Names the game sent on one connection. It sends a name only as a player comes
@@ -19,7 +34,17 @@ public sealed class SavedNames
 {
     public string Connection { get; set; } = "";
     public Dictionary<int, string> Names { get; set; } = new();
+    public Dictionary<int, long> CombatPower { get; set; } = new();
+    /// <summary>The row you marked as yours.</summary>
+    public int? Self { get; set; }
 }
+
+public sealed record FightSkill(string Name, long Damage, int Hits, int Crits, int Biggest);
+
+public sealed record FightPlayer(int Actor, string? Name, PlayerClass? Class, bool You, long Damage, int Hits, int Biggest, double Dps, double Share, IReadOnlyList<FightSkill> Skills, long? CombatPower = null);
+
+/// <summary>One fight in the history: boss fights count damage to bosses only.</summary>
+public sealed record FightRecord(string Id, DateTimeOffset Start, double Seconds, string Target, bool Boss, bool Killed, long Damage, IReadOnlyList<FightPlayer> Players);
 
 /// <summary>Atomic JSON storage in the user's data folder.</summary>
 public sealed class Store(string folder)
@@ -28,6 +53,9 @@ public sealed class Store(string folder)
     public string Folder { get; } = folder;
     string File => Path.Combine(Folder, "settings.json");
     string NamesFile => Path.Combine(Folder, "names.json");
+    string HistoryFolder => Path.Combine(Folder, "history");
+    // Enough for months of bosses, and trash cannot push them out.
+    const int KeepBossFights = 500, KeepOtherFights = 200;
 
     public static string DefaultFolder() => Path.Combine(Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } home ? home : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"), "arno-dps-meter");
 
@@ -74,6 +102,35 @@ public sealed class Store(string folder)
     public void Save(Settings settings) => Write(File, settings);
 
     public void Save(SavedNames names) => Write(NamesFile, names);
+
+    public void Save(FightRecord fight)
+    {
+        Directory.CreateDirectory(HistoryFolder);
+        Write(Path.Combine(HistoryFolder, fight.Id + ".json"), fight);
+        string prefix = fight.Boss ? "boss-" : "other-";
+        foreach (string old in Directory.GetFiles(HistoryFolder, prefix + "*.json").OrderDescending(StringComparer.Ordinal).Skip(fight.Boss ? KeepBossFights : KeepOtherFights))
+            System.IO.File.Delete(old);
+    }
+
+    /// <summary>Saved fights, newest first.</summary>
+    public IReadOnlyList<FightRecord> LoadFights()
+    {
+        if (!Directory.Exists(HistoryFolder))
+            return [];
+        var fights = new List<FightRecord>();
+        foreach (string path in Directory.GetFiles(HistoryFolder, "*.json"))
+            try
+            {
+                if (JsonSerializer.Deserialize<FightRecord>(System.IO.File.ReadAllText(path), Json) is { } fight)
+                    fights.Add(fight);
+            }
+            catch (JsonException)
+            {
+                // a damaged file is one lost fight
+            }
+
+        return fights.OrderByDescending(f => f.Start).ToArray();
+    }
 
     public SavedNames? LoadNames()
     {

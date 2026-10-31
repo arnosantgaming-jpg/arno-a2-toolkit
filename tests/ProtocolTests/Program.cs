@@ -138,6 +138,20 @@ List<Frame> Split(params byte[][] chunks)
     Check(PlayerClasses.FromSkill(12_000_000) == null && PlayerClasses.FromSkill(16_500_000) == null && PlayerClasses.FromSkill(16_010_000) == PlayerClass.Spiritmaster && PlayerClasses.FromSkill(100_600) == PlayerClass.Spiritmaster, "generic and spirit-only skills do not name a class");
 
     Check(Decode(0x21, 0x36, Cat(I32(1), I32(1010), new byte[8])) is ZoneEntered { Zone: 1010 }, "zone");
+    Check(Decode(0x41, 0x36, Cat(Var(777), new byte[] { 0x0C, 0, 0, 0x23, 0x0B, 0x20, 0, 0, 2, 9 })) is NpcSeen { Entity: 777, Code: 0x200B23 }, "a creature's code");
+    Check(Decode(0x42, 0x36, Cat(Var(777), new byte[] { 0, 3 })) is EntityDied { Entity: 777 }, "a death");
+    Check(Decode(0x42, 0x36, Cat(Var(777), new byte[] { 0, 1 })) == null, "leaving view is no death");
+    byte[] Tail(params byte[] end) => Cat(Var(5151), I32(0), new byte[] { 7, 3 }, "Ann"u8.ToArray(), new byte[30], new byte[] { 0xF4, 0xCB, 0x1F }, end);
+    Check(Decode(0x45, 0x36, Tail(0xA0, 4, 0, 0, 0x0C, 0, 0, 0, 0x73, 0x3D, 2, 0, 0, 0, 0, 0, 0, 0)) is PlayerSeen { Power: 146_803 }, "a player's combat power");
+    Check(Decode(0x45, 0x36, Tail(0x17, 4, 0, 0, 0x13, 0, 0, 0, 0x26, 0, 0, 0, 0x89, 0xA7, 0, 0, 0, 0, 0, 0, 0)) is PlayerSeen { Power: 42_889 }, "combat power four bytes further on");
+    Check(Decode(0x45, 0x36, Tail(0x0F, 4, 0, 0, 0x13, 0, 0)) is PlayerSeen { Power: null }, "no combat power in a short record");
+    var own = Cat(Var(4242), I32(0), new byte[] { 7, 3 }, "Ann"u8.ToArray(), new byte[] { 0xD2, 0x04 }, BitConverter.GetBytes(7), new byte[6], BitConverter.GetBytes(109_396L), BitConverter.GetBytes(110_000L), new byte[] { 5, 1, 0, 0, 2, 0, 0, 3, 0, 0, 4, 0, 0, 5, 0, 0 });
+    Check(Decode(0x33, 0x36, own) is CharacterIdentity { Power: 109_396 }, "your own combat power");
+    var mark = new byte[] { 0x80, 0x75, 0xD5, 0x2A, 0xBB, 0x03, 0, 0 };
+    Check(Decode(0x41, 0x36, Cat(Var(22224), new byte[] { 0x5F, 0, 0 }, new byte[40], mark, Var(4631), new byte[4])) is SummonSeen { Entity: 22224, Owner: 4631 }, "a summon names its owner");
+    Check(Decode(0x41, 0x36, Cat(Var(22224), new byte[] { 0x0C, 0, 0 }, mark, Var(4631))) == null, "a creature is no summon");
+    Check(Decode(0x41, 0x36, Cat(Var(22224), new byte[] { 0x5F, 0, 0 }, mark, Var(22224))) == null, "a summon does not own itself");
+    Check(Decode(0x41, 0x36, Cat(Var(22224), new byte[] { 0x5F, 0, 0 }, new byte[200], mark, Var(4631))) == null, "a mark far away is something else");
 
     Check(Decode(0x00, 0x8D, Cat(Var(4242), new byte[6])) is SelfHint { Entity: 4242 }, "self hint");
 

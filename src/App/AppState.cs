@@ -42,6 +42,7 @@ public sealed class AppState
     {
         stop.Cancel();
         tick.Stop();
+        Engine.Damage.Finish();
         Engine.SaveIfChanged();
         try
         {
@@ -55,6 +56,7 @@ public sealed class AppState
     void Tick()
     {
         var now = DateTimeOffset.UtcNow;
+        Engine.Tick(now);
         if (now - lastSave > TimeSpan.FromSeconds(5))
         {
             lastSave = now;

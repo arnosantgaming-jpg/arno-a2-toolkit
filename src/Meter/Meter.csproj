@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Protocol/Protocol.csproj" />
+    <EmbeddedResource Include="../../assets/data/*.tsv" LogicalName="%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

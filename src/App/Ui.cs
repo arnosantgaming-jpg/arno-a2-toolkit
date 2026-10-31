@@ -10,16 +10,16 @@ namespace ArnoA2.App;
 
 public static class Ui
 {
-    public static readonly IBrush Window = Brush.Parse("#070B12");
-    public static readonly IBrush Panel = Brush.Parse("#0C1420");
-    public static readonly IBrush Line = Brush.Parse("#1E3A5F");
+    public static readonly IBrush Window = Brushes.Black;
+    public static readonly IBrush Panel = Brush.Parse("#0A0A0A");
+    public static readonly IBrush Line = Brush.Parse("#262626");
     public static readonly IBrush Accent = Brush.Parse("#4FB6FF");
     public static readonly IBrush Title = Brush.Parse("#E1EBFF");
     public static readonly IBrush Rate = Brush.Parse("#CFE9FF");
     public static readonly IBrush Muted = Brush.Parse("#8A9AAE");
-    public static readonly IBrush Track = Brush.Parse("#2E3A48");
+    public static readonly IBrush Track = Brush.Parse("#2B2B2B");
     /// <summary>A row whose class is not known yet.</summary>
-    public static readonly Color NoClass = Color.Parse("#5A47B0");
+    public static readonly Color NoClass = Color.Parse("#6B7A8C");
 
     /// <summary>The class colours of A2Tools' AION2 themes.</summary>
     public static Color ClassColor(PlayerClass? job) => job switch
@@ -51,7 +51,12 @@ public static class Ui
             }
 
             if (bitmap != null)
-                return new Image { Source = bitmap, Width = size, Height = size };
+            {
+                var image = new Image { Source = bitmap, Width = size, Height = size };
+                // The default filter turns fine art this small into jagged noise.
+                RenderOptions.SetBitmapInterpolationMode(image, BitmapInterpolationMode.HighQuality);
+                return image;
+            }
         }
 
         var color = ClassColor(job);
@@ -87,7 +92,7 @@ public static class Ui
     /// <summary>A button that is only its label until the pointer is over it.</summary>
     public static Border Flat(string label, Action action, string? tip = null)
     {
-        var flat = new Border { Padding = new Thickness(10, 4), CornerRadius = new CornerRadius(4), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 13, Foreground = Muted } };
+        var flat = new Border { Padding = new Thickness(5, 2), CornerRadius = new CornerRadius(3), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 10.5, Foreground = Muted } };
         if (tip != null)
             ToolTip.SetTip(flat, tip);
         flat.PointerEntered += (_, _) => flat.Background = Line;
@@ -106,6 +111,35 @@ public static class Ui
         var label = (TextBlock)flat.Child!;
         label.Foreground = selected ? Accent : Muted;
         label.FontWeight = selected ? FontWeight.SemiBold : FontWeight.Normal;
+    }
+
+    /// <summary>Combat power, as it follows a name: (155K). Empty until the game sends it.</summary>
+    public static TextBlock CombatPower(long? power) => new() { Text = PowerText(power), FontSize = 9.5, Foreground = Muted, VerticalAlignment = VerticalAlignment.Center };
+
+    public static string PowerText(long? power) => power switch
+    {
+        null => "",
+        >= 1_000_000 => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"({power / 1_000_000d:0.#}M)"),
+        >= 1_000 => $"({power / 1_000}K)",
+        _ => $"({power})"
+    };
+
+    /// <summary>A text cell in a table.</summary>
+    public static TextBlock Cell(string text, double size, IBrush brush, int column, bool right = false, bool bold = false)
+    {
+        var cell = new TextBlock { Text = text, FontSize = size, Foreground = brush, FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = right ? HorizontalAlignment.Right : HorizontalAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4, 0) };
+        Grid.SetColumn(cell, column);
+        return cell;
+    }
+
+    /// <summary>A horizontal share bar.</summary>
+    public static Control ShareBar(double share, Color color, int column)
+    {
+        var fill = new Grid { ColumnDefinitions = new ColumnDefinitions($"{Math.Max(share, 0.001).ToString(System.Globalization.CultureInfo.InvariantCulture)}*,{Math.Max(1 - share, 0).ToString(System.Globalization.CultureInfo.InvariantCulture)}*") };
+        fill.Children.Add(new Border { Background = Bar(color) });
+        var bar = new Border { Background = Track, Height = 7, Margin = new Thickness(4, 0), Child = fill };
+        Grid.SetColumn(bar, column);
+        return bar;
     }
 
     public static TextBlock Heading(string text, double size = 18) => new() { Text = text, FontSize = size, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 2) };

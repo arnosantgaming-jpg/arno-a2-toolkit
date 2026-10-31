@@ -7,7 +7,7 @@ namespace ArnoA2.App;
 
 public sealed class SettingsWindow : Window
 {
-    public SettingsWindow(AppState app)
+    public SettingsWindow(AppState app, Action? opacityChanged = null)
     {
         Title = "Arno's DPS Meter · settings";
         Width = 440;
@@ -28,6 +28,24 @@ public sealed class SettingsWindow : Window
         row.Children.Add(quiet);
         row.Children.Add(new TextBlock { Text = "A fight ends after seconds without a hit", VerticalAlignment = VerticalAlignment.Center });
         panel.Children.Add(row);
+
+        panel.Children.Add(Ui.Heading("Look"));
+        var opacityLabel = new TextBlock { Text = $"{engine.Settings.MeterOpacity} %", Width = 50, TextAlignment = Avalonia.Media.TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        var opacity = new Slider { Minimum = 20, Maximum = 100, Value = engine.Settings.MeterOpacity };
+        opacity.ValueChanged += (_, e) =>
+        {
+            int percent = (int)Math.Round(e.NewValue);
+            opacityLabel.Text = $"{percent} %";
+            engine.ChangeSettings(s => s.MeterOpacity = percent);
+            opacityChanged?.Invoke();
+        };
+        var look = new DockPanel();
+        DockPanel.SetDock(opacityLabel, Dock.Right);
+        look.Children.Add(opacityLabel);
+        look.Children.Add(opacity);
+        panel.Children.Add(new TextBlock { Text = "Background opacity" });
+        panel.Children.Add(look);
+        panel.Children.Add(Ui.Note("Lower lets the game show through. Text and bars stay solid."));
 
         panel.Children.Add(Ui.Heading("Your character"));
         var character = new TextBox { Text = engine.Settings.Character, PlaceholderText = "Character name" };
