@@ -5,6 +5,7 @@ using ArnoA2.Capture;
 using ArnoA2.Protocol;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("linux")]
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows")]
 
 // Usage: CaptureTests [daemon-path recording.pcap server-port]
 // Unit checks always run; the end-to-end check runs when a recording is given.
@@ -60,6 +61,51 @@ string Text(List<StreamEvent> events) => string.Concat(events.Select(e => e is S
     };
     var found = GameConnections.Parse(rows, new HashSet<ulong> { 71830, 71831, 71832, 71833 }).ToArray();
     Check(found.Length == 1 && found[0].RemotePort == 13328 && found[0].Remote.Equals(IPAddress.Parse("193.202.112.199")), "only the game's open, non-HTTPS, non-loopback connection");
+}
+
+// --- Windows connection tables and adapter filter -----------------------------------
+{
+    byte[] V4(params (uint State, string Local, int LocalPort, string Remote, int RemotePort, int Process)[] rows)
+    {
+        var table = new byte[4 + rows.Length * 24];
+        BitConverter.TryWriteBytes(table, rows.Length);
+        for (int i = 0; i < rows.Length; i++)
+        {
+            int at = 4 + i * 24;
+            var r = rows[i];
+            BitConverter.TryWriteBytes(table.AsSpan(at), r.State);
+            IPAddress.Parse(r.Local).TryWriteBytes(table.AsSpan(at + 4), out _);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(table.AsSpan(at + 8), (ushort)r.LocalPort);
+            IPAddress.Parse(r.Remote).TryWriteBytes(table.AsSpan(at + 12), out _);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(table.AsSpan(at + 16), (ushort)r.RemotePort);
+            BitConverter.TryWriteBytes(table.AsSpan(at + 20), r.Process);
+        }
+
+        return table;
+    }
+
+    var game = new HashSet<int> { 42 };
+    var open = WindowsGameConnections.ParseV4(V4(
+        (5, "10.0.0.10", 50000, "193.202.112.199", 13328, 42),
+        (3, "10.0.0.10", 50001, "193.202.112.199", 13328, 42),
+        (5, "10.0.0.10", 50002, "20.20.20.20", 443, 42),
+        (5, "127.0.0.1", 50003, "127.0.0.1", 13328, 42),
+        (8, "10.0.0.10", 50004, "193.202.112.199", 13328, 42),
+        (5, "10.0.0.10", 50005, "193.202.112.199", 13328, 7)), game).ToArray();
+    Check(open.Length == 2 && open[0] == new Connection(IPAddress.Parse("10.0.0.10"), 50000, IPAddress.Parse("193.202.112.199"), 13328) && open[1].LocalPort == 50001, "only the game's open or opening, non-HTTPS, non-loopback IPv4 connections");
+    Check(!WindowsGameConnections.ParseV4(new byte[4], game).Any() && !WindowsGameConnections.ParseV4(Array.Empty<byte>(), game).Any(), "an empty table has no connections");
+
+    var six = new byte[4 + 56];
+    six[0] = 1;
+    IPAddress.Parse("10.0.0.10").MapToIPv6().TryWriteBytes(six.AsSpan(4), out _);
+    System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(six.AsSpan(4 + 20), 50000);
+    IPAddress.Parse("193.202.112.199").MapToIPv6().TryWriteBytes(six.AsSpan(4 + 24), out _);
+    System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(six.AsSpan(4 + 44), 13328);
+    BitConverter.TryWriteBytes(six.AsSpan(4 + 48), 5u);
+    BitConverter.TryWriteBytes(six.AsSpan(4 + 52), 42);
+    var mapped = WindowsGameConnections.ParseV6(six, game).Single();
+    Check(mapped == new Connection(IPAddress.Parse("10.0.0.10"), 50000, IPAddress.Parse("193.202.112.199"), 13328), "IPv4-mapped rows come out as the same connection a packet shows");
+    Check(NpcapCapture.ReceivedBy(new[] { IPAddress.Parse("10.0.0.10"), IPAddress.Parse("2001:db8::1") }, "tcp") == "tcp and (dst host 10.0.0.10 or dst host 2001:db8::1)", "adapter filter keeps packets sent to its own addresses");
 }
 
 // --- End to end -------------------------------------------------------------------

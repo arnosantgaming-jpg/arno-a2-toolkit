@@ -37,10 +37,10 @@ public sealed class MinimapTracker : IDisposable
 
     void Run()
     {
-        using var capture = new GameCapture();
+        using var capture = GameCapture.Open();
         if (!capture.Available)
         {
-            Post(null, "Minimap reading needs an X11/XWayland display");
+            Post(null, GameCapture.Unavailable);
             return;
         }
 
@@ -70,7 +70,7 @@ public sealed class MinimapTracker : IDisposable
         return (width - (int)Math.Round((RightMargin + AreaWidth) * scale), (int)Math.Round(Top * scale), w, h);
     }
 
-    void Step(GameCapture capture)
+    void Step(IGameCapture capture)
     {
         if (seed is not { } s || !WorldMaps.All.TryGetValue(s.Region, out var map))
             return;

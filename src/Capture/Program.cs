@@ -5,9 +5,10 @@ using ArnoA2.Capture;
 using ArnoA2.Protocol;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("linux")]
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows")]
 
 // arno-a2-capture [--socket PATH] [--parent PID] [--read FILE --own-port PORT]
-//   Live (default): capture with cap_net_raw, then drop privileges.
+//   Live (default): capture with cap_net_raw then drop privileges, or through Npcap on Windows.
 //   --read: replay a capture file instead (no privileges; for tests), treating
 //   connections whose server port is PORT as the game's.
 var options = Options.Parse(args);
@@ -33,7 +34,7 @@ sealed record Options(string Socket, int? Parent, string? ReadFile, int? OwnPort
 sealed class Daemon(Options options)
 {
     static readonly TimeSpan ScanInterval = TimeSpan.FromSeconds(2), MinRescan = TimeSpan.FromMilliseconds(250), PendingLimit = TimeSpan.FromSeconds(3), Idle = TimeSpan.FromMinutes(2), NoClientExit = TimeSpan.FromMinutes(1);
-    readonly GameConnections scanner = new();
+    readonly IGameConnections scanner = CapturePlatform.Scanner();
     readonly Dictionary<Connection, Flow> flows = new();
     readonly Dictionary<Connection, (DateTimeOffset First, List<Segment> Segments)> pending = new();
     readonly Dictionary<Connection, DateTimeOffset> foreign = new();
@@ -56,25 +57,16 @@ sealed class Daemon(Options options)
 
     public int Run()
     {
-        using var source = options.ReadFile is { } file ? PacketSource.File(file) : PacketSource.Live();
-        if (!source.Offline)
-            Privileges.DropAll();
+        using IPacketSource source = options.ReadFile is { } file ? PacketSource.File(file) : CapturePlatform.Live();
+        string hardened = source.Offline ? "" : CapturePlatform.DropPrivileges();
         // Incoming TCP only; HTTPS and loopback can never be the game connection.
-        const string filter = "tcp and not port 443 and not net 127.0.0.0/8";
-        try
-        {
-            source.Filter("inbound and " + filter);
-        }
-        catch (IOException)
-        {
-            source.Filter(filter); // capture files without direction information
-        }
+        source.FilterInbound("tcp and not port 443 and not net 127.0.0.0/8");
 
         Listen();
         var writer = new Thread(WriteLoop) { IsBackground = true, Name = "channel writer" };
         writer.Start();
         state = source.Offline ? "Replaying" : "Capturing";
-        message = source.Offline ? "" : "Privileges dropped: " + Privileges.Current();
+        message = hardened;
         if (source.Offline)
             WaitForClient(TimeSpan.FromSeconds(10));
         while (true)
@@ -143,7 +135,7 @@ sealed class Daemon(Options options)
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            message = "Could not read /proc: " + ex.Message;
+            message = "Could not list the game's connections: " + ex.Message;
         }
     }
 
@@ -228,12 +220,14 @@ sealed class Daemon(Options options)
     {
         string directory = Path.GetDirectoryName(options.Socket)!;
         Directory.CreateDirectory(directory);
-        File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        if (File.Exists(options.Socket))
-            File.Delete(options.Socket); // stale socket from a previous run
+        // On Windows the folder sits in the user's own temp folder, closed to other users.
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        File.Delete(options.Socket); // stale socket from a previous run
         listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         listener.Bind(new UnixDomainSocketEndPoint(options.Socket));
-        File.SetUnixFileMode(options.Socket, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(options.Socket, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         listener.Listen(1);
         listener.Blocking = false;
     }
@@ -306,7 +300,7 @@ sealed class Daemon(Options options)
 
     bool ShouldExit()
     {
-        if (options.Parent is int parent && !Directory.Exists("/proc/" + parent))
+        if (options.Parent is int parent && !CapturePlatform.Running(parent))
             return true;
         return client == null && DateTimeOffset.UtcNow - noClientSince > NoClientExit;
     }

@@ -7,7 +7,6 @@ namespace ArnoA2.App.Map;
 /// the reading looks for a brightening edge and a darkening edge one cone width apart.
 /// Uses the same minimap area as <see cref="MinimapTracker"/>, but its own capture: that one
 /// grabs four times a second and only while placed, the cone needs thirty for smooth turns.
-/// Linux (X11/XWayland) only for now.
 /// </summary>
 public sealed class CameraHeading : IDisposable
 {
@@ -18,12 +17,6 @@ public sealed class CameraHeading : IDisposable
 
     public CameraHeading()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            Status = "Turning with the camera works on Linux only for now.";
-            return;
-        }
-
         thread = new Thread(Run) { IsBackground = true, Name = "Camera heading", Priority = ThreadPriority.BelowNormal };
         thread.Start();
     }
@@ -37,10 +30,10 @@ public sealed class CameraHeading : IDisposable
 
     void Run()
     {
-        using var capture = new GameCapture();
+        using var capture = GameCapture.Open();
         if (!capture.Available)
         {
-            Status = "Turning with the camera needs an X11/XWayland display.";
+            Status = GameCapture.Unavailable;
             return;
         }
 
@@ -60,7 +53,7 @@ public sealed class CameraHeading : IDisposable
         }
     }
 
-    void Step(GameCapture capture)
+    void Step(IGameCapture capture)
     {
         if (capture.Size == null && !capture.Find())
         {

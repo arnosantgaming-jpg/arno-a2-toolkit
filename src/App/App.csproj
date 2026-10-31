@@ -7,6 +7,7 @@
     <RootNamespace>ArnoA2.App</RootNamespace>
     <AssemblyName>arno-a2-toolkit</AssemblyName>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ApplicationIcon Condition="'$(RuntimeIdentifier)' == 'win-x64'">../../assets/icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
@@ -23,5 +24,9 @@
     <Content Include="../../assets/crystals/*.png" Link="crystals/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/maps/**/*.jpg" Link="maps/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/hub/*.png" Link="hub/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- tools/build.sh win-x64-portable: the capture program and notices, packed into the exe. -->
+  <ItemGroup Condition="'$(PortableExtras)' != ''">
+    <Content Include="$(PortableExtras)/**" Link="%(RecursiveDir)%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

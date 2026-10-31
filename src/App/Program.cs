@@ -1,9 +1,12 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("linux")]
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows")]
 
 namespace ArnoA2.App;
 
@@ -29,7 +32,7 @@ internal static class Program
         using (instance)
             // Drawn on the CPU: these small windows gain nothing from the GPU, and sharing the
             // NVIDIA driver with a running game crashes inside it.
-            return AppBuilder.Configure<App>().UsePlatformDetect().With(new X11PlatformOptions { RenderingMode = new[] { X11RenderingMode.Software } }).StartWithClassicDesktopLifetime(args);
+            return AppBuilder.Configure<App>().UsePlatformDetect().With(new X11PlatformOptions { RenderingMode = new[] { X11RenderingMode.Software } }).With(new Win32PlatformOptions { RenderingMode = new[] { Win32RenderingMode.Software } }).StartWithClassicDesktopLifetime(args);
     }
 }
 
@@ -42,6 +45,9 @@ public sealed class App : Application
     {
         RequestedThemeVariant = ThemeVariant.Dark;
         Styles.Add(new FluentTheme());
+        // Subpixel text needs a solid background behind it: over the see-through overlays it comes
+        // out with dark blocks and coloured edges around the letters.
+        Window.WindowOpenedEvent.AddClassHandler<Window>((window, _) => TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias));
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -50,7 +56,7 @@ public sealed class App : Application
         {
             AppState.Adopt();
             var store = AppState.OpenStore();
-            string daemon = Path.Combine(AppContext.BaseDirectory, "capture", "arno-a2-capture");
+            string daemon = Desktop.CaptureProgram;
             state = new AppState(store, new ArnoA2.Meter.Store(ArnoA2.Meter.Store.DefaultFolder()), File.Exists(daemon) ? daemon : null);
             var hub = new HubWindow(state, new MapHub(state, store.Folder));
             desktop.MainWindow = hub;

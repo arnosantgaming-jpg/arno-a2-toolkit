@@ -126,19 +126,22 @@ public sealed class ToolkitSettingsPanel : UserControl
 
         panel.Children.Add(Ui.Heading("Capture"));
         panel.Children.Add(captureNote);
-        string daemon = Path.Combine(AppContext.BaseDirectory, "capture", "arno-a2-capture");
-        panel.Children.Add(Ui.Button("Grant capture permission", async () =>
-        {
-            captureNote.Text = "Waiting for the password dialog…";
-            try
+        string daemon = Desktop.CaptureProgram;
+        if (OperatingSystem.IsWindows())
+            panel.Children.Add(Ui.Note("Capture uses Npcap, which you install once from npcap.com. Leave its \"administrators only\" option off."));
+        else
+            panel.Children.Add(Ui.Button("Grant capture permission", async () =>
             {
-                captureNote.Text = await AppState.GrantPermission(daemon);
-            }
-            catch (Exception ex)
-            {
-                captureNote.Text = "Could not grant: " + ex.Message;
-            }
-        }, "Gives the capture program (only) permission to read network packets; asks for your password"));
+                captureNote.Text = "Waiting for the password dialog…";
+                try
+                {
+                    captureNote.Text = await AppState.GrantPermission(daemon);
+                }
+                catch (Exception ex)
+                {
+                    captureNote.Text = "Could not grant: " + ex.Message;
+                }
+            }, "Gives the capture program (only) permission to read network packets; asks for your password"));
         if (KdeWindowRules.Available)
         {
             var kdeNote = Ui.Note("");

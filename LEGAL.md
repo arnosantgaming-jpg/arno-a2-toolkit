@@ -2,16 +2,17 @@
 
 ## Independent project
 
-Arno's Pet Tracker is an unofficial, independent companion application. It is not
+Arno's A2 Toolkit is an unofficial, independent companion application. It is not
 affiliated with, endorsed by, sponsored by or supported by NC Corporation, NCSOFT or
 the operators of AION 2, nor by the authors of the projects it credits. References to
 AION 2 identify the game it is meant to work with.
 
 ## Game rules and account risk
 
-The tracker observes the game's incoming network traffic locally, and can read the
-pixels of the in-game minimap from the game window, to display pet information. It
-does not read or change game memory, send anything to the game, or automate combat,
+The toolkit observes the game's incoming network traffic locally, and can read the
+pixels of the in-game minimap, to display pet, combat and map information. On Windows
+it reads that corner of the screen, and capture relies on Npcap, which the user installs.
+It does not read or change game memory, send anything to the game, or automate combat,
 movement or farming. That does not establish permission to use it under the game's
 terms.
 
@@ -38,6 +39,6 @@ law.
 ## Concerns and corrections
 
 To report an ownership, licensing or attribution concern,
-[open an issue](https://github.com/arnosantgaming-jpg/arno-pet-tracker/issues/new)
+[open an issue](https://github.com/arnosantgaming-jpg/arno-a2-toolkit/issues/new)
 naming the affected file and the basis of the concern. Do not post confidential or
 personal information in a public issue.

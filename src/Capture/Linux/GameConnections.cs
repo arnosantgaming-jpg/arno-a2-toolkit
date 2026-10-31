@@ -18,25 +18,21 @@ public readonly record struct Connection(IPAddress Local, int LocalPort, IPAddre
 /// still being opened. Nothing outside the game
 /// process is ever selected.
 /// </summary>
-public sealed class GameConnections(string procRoot = "/proc")
+public sealed class GameConnections(string procRoot = "/proc") : IGameConnections
 {
-    static readonly string[] GameNames = { "aion2.exe", "aion2-win64-shipping.exe" };
-
-    public IReadOnlyList<int> Processes { get; private set; } = Array.Empty<int>();
+    internal static readonly string[] GameNames = { "aion2.exe", "aion2-win64-shipping.exe" };
 
     public IReadOnlyList<Connection> Scan()
     {
-        var pids = new List<int>();
         var inodes = new HashSet<ulong>();
         foreach (string directory in Directory.EnumerateDirectories(procRoot))
         {
-            if (!int.TryParse(Path.GetFileName(directory), out int pid))
+            if (!int.TryParse(Path.GetFileName(directory), out _))
                 continue;
             try
             {
                 if (!IsGame(File.ReadAllBytes(Path.Combine(directory, "cmdline"))))
                     continue;
-                pids.Add(pid);
                 foreach (string fd in Directory.EnumerateFileSystemEntries(Path.Combine(directory, "fd")))
                 {
                     string? target = new FileInfo(fd).LinkTarget;
@@ -50,7 +46,6 @@ public sealed class GameConnections(string procRoot = "/proc")
             }
         }
 
-        Processes = pids;
         var found = new List<Connection>();
         foreach (string table in new[] { "net/tcp", "net/tcp6" })
         {

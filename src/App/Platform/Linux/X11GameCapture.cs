@@ -8,7 +8,7 @@ namespace ArnoA2.App.Map;
 /// pixels the game has already drawn; nothing is injected into or read from the game process.
 /// Not thread-safe: use one instance from one thread.
 /// </summary>
-public sealed class GameCapture : IDisposable
+public sealed class X11GameCapture : IGameCapture
 {
     const string Lib = "libX11.so.6";
     [DllImport(Lib)] static extern IntPtr XOpenDisplay(IntPtr name);
@@ -39,7 +39,7 @@ public sealed class GameCapture : IDisposable
     }
 
     IntPtr display, window;
-    public GameCapture()
+    public X11GameCapture()
     {
         display = XOpenDisplay(IntPtr.Zero);
         lock (ours)

@@ -74,7 +74,7 @@ public sealed class Store(string folder)
     public string Folder { get; } = folder;
     string File => Path.Combine(Folder, "data.json");
 
-    public static string DefaultFolder() => Path.Combine(Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } home ? home : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"), "arno-a2-toolkit", "pets");
+    public static string DefaultFolder() => Path.Combine(OperatingSystem.IsWindows() ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) : Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } home ? home : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"), "arno-a2-toolkit", "pets");
 
     public SavedState Load()
     {

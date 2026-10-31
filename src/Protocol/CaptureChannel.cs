@@ -24,8 +24,8 @@ public sealed record ChannelMessage(ChannelKind Kind, uint Flow, byte[] Payload)
 }
 
 /// <summary>
-/// The capture daemon's link to the app: a Unix stream socket in the user's runtime
-/// directory (mode 0700), carrying length-prefixed records
+/// The capture daemon's link to the app: a Unix stream socket (Windows has them too) in the
+/// user's runtime directory (mode 0700) or temp folder, carrying length-prefixed records
 /// kind:u8 flow:u32 length:u32 payload. Only the server→client direction of game
 /// connections is ever sent.
 /// </summary>

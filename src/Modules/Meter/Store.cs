@@ -57,7 +57,7 @@ public sealed class Store(string folder)
     // Enough for months of bosses, and trash cannot push them out.
     const int KeepBossFights = 500, KeepOtherFights = 200;
 
-    public static string DefaultFolder() => Path.Combine(Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } home ? home : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"), "arno-a2-toolkit", "meter");
+    public static string DefaultFolder() => Path.Combine(OperatingSystem.IsWindows() ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) : Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } home ? home : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"), "arno-a2-toolkit", "meter");
 
     public Settings Load()
     {

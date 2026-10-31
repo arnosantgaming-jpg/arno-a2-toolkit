@@ -45,31 +45,6 @@ public sealed class HubSettings
     }
 }
 
-/// <summary>The desktop's start-at-login entry, the same one tools/install.sh --autostart writes.</summary>
-static class Autostart
-{
-    const string Id = "arno-a2-toolkit";
-
-    static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-    static string Entry => Path.Combine(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } config ? config : Path.Combine(Home, ".config"), "autostart", Id + ".desktop");
-    static string Menu => Path.Combine(Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } data ? data : Path.Combine(Home, ".local/share"), "applications", Id + ".desktop");
-
-    public static bool Enabled => File.Exists(Entry);
-
-    public static void Set(bool on)
-    {
-        if (!on)
-        {
-            File.Delete(Entry);
-            return;
-        }
-
-        string entry = File.Exists(Menu) ? File.ReadAllText(Menu).TrimEnd() : $"[Desktop Entry]\nType=Application\nName=Arno's A2 Toolkit\nExec={Environment.ProcessPath}";
-        Directory.CreateDirectory(Path.GetDirectoryName(Entry)!);
-        File.WriteAllText(Entry, entry + "\nX-KDE-autostart-after=panel\n");
-    }
-}
-
 /// <summary>The toolkit's main window: every tool in one place, and the capture status they
 /// all share. Laid out on a fixed 1536×1024 canvas, the size its art was cut at, which scales
 /// with the window. Closing it closes the toolkit.</summary>
@@ -235,7 +210,7 @@ public sealed class HubWindow : Window
         Show(meterToggle, meter != null);
         Show(resourceToggle, resources != null);
         Show(cubeToggle, cubes != null);
-        Show(loginToggle, Autostart.Enabled);
+        Show(loginToggle, Desktop.StartsAtLogin);
         Show(restoreToggle, saved.Restore);
     }
 
@@ -508,7 +483,7 @@ public sealed class HubWindow : Window
         {
             try
             {
-                Autostart.Set(!Autostart.Enabled);
+                Desktop.SetStartsAtLogin(!Desktop.StartsAtLogin);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -694,21 +669,9 @@ public sealed class HubWindow : Window
         return control;
     }
 
-    static void Start(string program, string argument)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo(program, new[] { argument }) { UseShellExecute = false })?.Dispose();
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            // not installed: nothing to open it with
-        }
-    }
+    void LaunchGame() => Desktop.Open(SteamGame, "steam");
 
-    void LaunchGame() => Start("steam", SteamGame);
-
-    void OpenData() => Start("xdg-open", folder);
+    void OpenData() => Desktop.Open(folder, "xdg-open");
 
     void Remember(Action<HubSettings> change)
     {

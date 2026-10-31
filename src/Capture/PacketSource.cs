@@ -8,13 +8,16 @@ namespace ArnoA2.Capture;
 public readonly record struct Segment(DateTimeOffset Time, IPAddress Source, int SourcePort, IPAddress Destination, int DestinationPort, uint Sequence, bool Syn, bool Fin, bool Reset, ReadOnlyMemory<byte> Payload);
 
 /// <summary>
-/// Minimal libpcap binding: live capture on the "any" device (one copy of every packet,
-/// whatever the interface or VPN) or offline reading of a capture file. Only what the
-/// daemon needs; errors throw <see cref="IOException"/> with libpcap's message.
+/// Minimal pcap binding, libpcap on Linux and Npcap's wpcap.dll on Windows: live capture on
+/// one device or offline reading of a capture file. Only what the daemon needs; errors
+/// throw <see cref="IOException"/> with pcap's message.
 /// </summary>
-public sealed class PacketSource : IDisposable
+public sealed class PacketSource : IPacketSource
 {
-    const string Lib = "libpcap.so.1";
+    internal const string Lib = "pcap";
+
+    static PacketSource() => NativeLibrary.SetDllImportResolver(typeof(PacketSource).Assembly, (name, _, _) => name != Lib ? IntPtr.Zero : OperatingSystem.IsWindows() ? Npcap.Load() : NativeLibrary.Load("libpcap.so.1"));
+
     [DllImport(Lib)] static extern IntPtr pcap_create(string source, byte[] error);
     [DllImport(Lib)] static extern IntPtr pcap_open_offline(string path, byte[] error);
     [DllImport(Lib)] static extern int pcap_set_snaplen(IntPtr p, int snaplen);
@@ -55,11 +58,12 @@ public sealed class PacketSource : IDisposable
         }
     }
 
-    /// <summary>Opens live capture on all interfaces. Needs CAP_NET_RAW.</summary>
-    public static PacketSource Live()
+    /// <summary>Opens live capture on a device. On Linux "any" gives one copy of every packet,
+    /// whatever the interface or VPN, and needs CAP_NET_RAW.</summary>
+    public static PacketSource Device(string name)
     {
         var error = new byte[256];
-        var p = pcap_create("any", error);
+        var p = pcap_create(name, error);
         if (p == IntPtr.Zero)
             throw new IOException(Text(error));
         pcap_set_snaplen(p, 65535);
@@ -72,7 +76,7 @@ public sealed class PacketSource : IDisposable
         {
             string message = Marshal.PtrToStringUTF8(pcap_geterr(p)) ?? "pcap_activate failed";
             pcap_close(p);
-            throw new IOException(status == -8 ? "Permission denied: the capture program needs cap_net_raw (" + message + ")" : message);
+            throw new IOException(status == -8 ? (OperatingSystem.IsWindows() ? "Permission denied: Npcap is set to administrators only. Reinstall it without that option (" : "Permission denied: the capture program needs cap_net_raw (") + message + ")" : message);
         }
 
         return new(p, offline: false);
@@ -103,6 +107,18 @@ public sealed class PacketSource : IDisposable
         }
     }
 
+    public void FilterInbound(string expression)
+    {
+        try
+        {
+            Filter("inbound and " + expression);
+        }
+        catch (IOException)
+        {
+            Filter(expression); // capture files without direction information
+        }
+    }
+
     /// <summary>Next TCP segment, null on read timeout. Throws at end of file or error.</summary>
     public Segment? Next(out bool end)
     {
@@ -118,9 +134,11 @@ public sealed class PacketSource : IDisposable
 
         if (result < 0)
             throw new IOException(Marshal.PtrToStringUTF8(pcap_geterr(handle)) ?? "Capture failed");
-        // struct pcap_pkthdr { struct timeval ts; bpf_u_int32 caplen; bpf_u_int32 len; } (LP64)
-        long seconds = Marshal.ReadInt64(header), micros = Marshal.ReadInt64(header, 8);
-        int captured = Marshal.ReadInt32(header, 16);
+        // struct pcap_pkthdr { struct timeval ts; bpf_u_int32 caplen; bpf_u_int32 len; }
+        // timeval holds two longs: 64-bit on Linux, 32-bit on Windows.
+        bool wide = !OperatingSystem.IsWindows();
+        long seconds = wide ? Marshal.ReadInt64(header) : Marshal.ReadInt32(header), micros = wide ? Marshal.ReadInt64(header, 8) : Marshal.ReadInt32(header, 4);
+        int captured = Marshal.ReadInt32(header, wide ? 16 : 8);
         var bytes = new byte[captured];
         Marshal.Copy(data, bytes, 0, captured);
         var time = DateTimeOffset.FromUnixTimeSeconds(seconds).AddTicks(micros * 10);

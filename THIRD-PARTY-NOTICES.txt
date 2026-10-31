@@ -39,6 +39,7 @@ Runtime dependencies (desktop app)
   licenses/Skia-HarfBuzz-NOTICES.txt); .NET runtime — MIT with third-party notices
   (licenses/NET-LICENSE.txt, licenses/NET-NOTICES.txt).
   libpcap and libcap are provided by the Linux distribution and are not bundled.
+  On Windows, capture uses Npcap, which the user installs from npcap.com. It is not bundled.
 
 Attribution does not establish a license to redistribute game artwork or data.
 See LEGAL.md.
