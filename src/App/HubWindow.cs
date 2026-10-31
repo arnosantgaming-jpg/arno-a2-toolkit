@@ -23,6 +23,7 @@ public sealed class HubSettings
     public bool Resources { get; set; }
     public bool Cubes { get; set; }
     public bool Restore { get; set; } = true;
+    public bool CheckUpdates { get; set; } = true;
 
     static string File(string folder) => Path.Combine(folder, "hub.json");
 
@@ -52,6 +53,7 @@ public sealed class HubWindow : Window
 {
     const double CanvasWidth = 1536, CanvasHeight = 1024;
     const string SteamGame = "steam://rungameid/3393110";
+    readonly Border updatePrompt = new() { IsVisible = false, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
     const double NavWidth = 265, DrawerWidth = 1027, DrawerScale = 1.3, MapScale = 1.15;
     public const string PetsDrawer = "pets", FinderDrawer = "finder", SessionDrawer = "session", MapDrawer = "map", MeterDrawer = "meter", LogDrawer = "log", ResourceDrawer = "resources", ResourceMapDrawer = "resource-map", CubeDrawer = "cubes", CubeMapDrawer = "cube-map", ToolkitDrawer = "toolkit", AboutDrawer = "about";
 
@@ -233,6 +235,7 @@ public sealed class HubWindow : Window
         Mark();
 
         Place(canvas, Text("v" + Version, 14, Off), 32, 958);
+        Place(canvas, updatePrompt, 84, 958);
         Place(canvas, navDot, 34, 985);
         Place(canvas, navDetected, 54, 981);
     }
@@ -304,7 +307,7 @@ public sealed class HubWindow : Window
             MeterDrawer => ("DPS Meter Settings", "cdps.png", ToolTheme.Meter, () => new MeterSettingsPanel(app, () => meter?.ApplyOpacity())),
             LogDrawer => ("Fight Log", "cdps.png", ToolTheme.Meter, () => new HistoryPanel(app)),
             ToolkitDrawer => ("Toolkit Settings", "i-gear.png", ToolTheme.Toolkit, () => new ToolkitSettingsPanel(app)),
-            _ => ("About", "i-info.png", ToolTheme.Toolkit, () => new AboutPanel(app, Version))
+            _ => ("About", "i-info.png", ToolTheme.Toolkit, () => new AboutPanel(app, Version, saved.CheckUpdates, on => Remember(s => s.CheckUpdates = on)))
         };
         opened = key;
         drawerIcon.Source = Picture(icon);
@@ -667,6 +670,47 @@ public sealed class HubWindow : Window
                 action();
         };
         return control;
+    }
+
+    /// <summary>Asks once, at start, whether a newer version is out.</summary>
+    public async Task CheckForUpdates()
+    {
+        if (saved.CheckUpdates && await UpdateCheck.Run(Version) is { } update)
+            OfferUpdate(update);
+    }
+
+    /// <summary>Shows the prompt beside the version. A click updates the portable Windows exe
+    /// and restarts it; otherwise, or if that fails, it opens the release page.</summary>
+    public void OfferUpdate(AvailableUpdate update)
+    {
+        var label = new TextBlock { Text = $"Update to v{update.Version}", FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(ToolTheme.Toolkit) };
+        updatePrompt.Child = label;
+        ToolTip.SetTip(updatePrompt, SelfUpdate.Possible ? "Download, install and restart" : "Open the download page");
+        bool busy = false;
+        updatePrompt.PointerReleased += async (_, _) =>
+        {
+            if (busy)
+                return;
+            if (!SelfUpdate.Possible)
+            {
+                Desktop.Open(update.Page, "xdg-open");
+                return;
+            }
+
+            busy = true;
+            try
+            {
+                await SelfUpdate.Install(update, percent => Dispatcher.UIThread.Post(() => label.Text = $"Downloading {percent} %"));
+                Close();
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+            {
+                label.Text = "Update failed";
+                ToolTip.SetTip(updatePrompt, ex.Message);
+                Desktop.Open(update.Page, "xdg-open");
+            }
+        };
+        updatePrompt.IsVisible = true;
     }
 
     void LaunchGame() => Desktop.Open(SteamGame, "steam");

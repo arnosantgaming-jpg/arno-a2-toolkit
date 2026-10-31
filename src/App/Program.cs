@@ -15,6 +15,7 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        SelfUpdate.Finish(args);
         // One toolkit per user: a second start just exits.
         string lockPath = Path.Combine(Path.GetDirectoryName(ArnoA2.Protocol.CaptureChannel.DefaultPath())!, "app.lock");
         Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);
@@ -63,6 +64,7 @@ public sealed class App : Application
             desktop.ShutdownRequested += (_, _) => state.Stop();
             hub.Closed += (_, _) => state.Stop();
             state.Start();
+            _ = hub.CheckForUpdates();
         }
 
         base.OnFrameworkInitializationCompleted();

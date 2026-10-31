@@ -85,6 +85,42 @@ hub.OpenMeter();
 Dispatcher.UIThread.RunJobs();
 Save(hub, "hub-launched.png");
 Check(Text(hub).Contains("Find a Pet") && Text(hub).Contains("Mini-map"), "a launched tool shows its buttons on its card");
+Check(UpdateCheck.Newer("{\"tag_name\":\"v0.4.0\"}", "0.3.0") is { Version: "0.4.0", Page: "https://github.com/arnosantgaming-jpg/arno-a2-toolkit/releases/tag/v0.4.0" }, "a newer release is offered");
+Check(UpdateCheck.Newer("{\"tag_name\":\"v0.3.0\"}", "0.3.0") == null && UpdateCheck.Newer("{\"tag_name\":\"v0.2.9\"}", "0.3.0") == null, "the same or an older release is not offered");
+Check(UpdateCheck.Newer("{\"tag_name\":\"v1.0.0/../../evil\"}", "0.3.0") == null && UpdateCheck.Newer("{\"message\":\"Not Found\"}", "0.3.0") == null && UpdateCheck.Newer("[]", "0.3.0") == null && UpdateCheck.Newer("<html>", "0.3.0") == null, "odd answers are ignored");
+{
+    string folder = Path.Combine(data, "update-test");
+    Directory.CreateDirectory(folder);
+    string exe = Path.Combine(folder, "app.exe"), incoming = exe + ".new";
+    File.WriteAllText(exe, "old");
+    File.WriteAllText(incoming, "new");
+    File.WriteAllText(exe + ".old", "older");
+    SelfUpdate.Swap(exe, incoming);
+    Check(File.ReadAllText(exe) == "new" && File.ReadAllText(exe + ".old") == "old" && !File.Exists(incoming), "an update swaps the exe and keeps the old one aside");
+    bool refused = false;
+    try
+    {
+        SelfUpdate.Swap(exe, incoming);
+    }
+    catch (FileNotFoundException)
+    {
+        refused = true;
+    }
+
+    Check(refused && File.ReadAllText(exe) == "new", "a failed swap leaves the working exe in place");
+    string sum = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("new")));
+    Check(SelfUpdate.Checksum(sum.ToUpperInvariant() + "  app.exe\n") == sum && SelfUpdate.Checksum("not found") == null && SelfUpdate.Checksum("") == null, "a checksum line is read, and anything else refused");
+    File.WriteAllText(incoming, "tampered");
+    Check(SelfUpdate.Matches(exe, sum) && !SelfUpdate.Matches(incoming, sum), "a download must match its checksum");
+    Check(new AvailableUpdate("1.2.3", "https://github.com/a/b/releases/tag/v1.2.3").Downloads == "https://github.com/a/b/releases/download/v1.2.3", "release files are found from the release page");
+    Check(!SelfUpdate.Possible, "the plain Linux build doesn't update itself");
+}
+
+Check(!Text(hub).Contains("Update to v"), "no update prompt until a newer release is found");
+hub.OfferUpdate(new("9.9.9", "https://github.com/arnosantgaming-jpg/arno-a2-toolkit/releases/tag/v9.9.9"));
+Dispatcher.UIThread.RunJobs();
+Check(Text(hub).Contains("Update to v9.9.9"), "a newer release shows the update prompt");
+Save(hub, "hub-update.png");
 hub.ShowDrawer(HubWindow.MeterDrawer);
 Thread.Sleep(400);
 Save(hub, "hub-meter-drawer.png");

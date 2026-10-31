@@ -190,7 +190,7 @@ public sealed class ToolkitSettingsPanel : UserControl
 /// <summary>Who made this and where its data lives.</summary>
 public sealed class AboutPanel : UserControl
 {
-    public AboutPanel(AppState app, string version)
+    public AboutPanel(AppState app, string version, bool checkUpdates, Action<bool> setCheckUpdates)
     {
         Content = new StackPanel
         {
@@ -199,6 +199,8 @@ public sealed class AboutPanel : UserControl
             {
                 Ui.Heading("Arno's A2 Toolkit " + version),
                 Ui.Note($"Data: {Path.GetDirectoryName(app.Store.Folder)}"),
+                Ui.Toggle("Check for updates at start", checkUpdates, setCheckUpdates),
+                Ui.Note("Asks GitHub for the newest version number. Nothing about you or your game is sent, and an update only happens when you click it."),
                 Ui.Note("Arno's A2 Toolkit is unofficial and not affiliated with NCSOFT; using third-party tools can put your account at risk. Message formats and data: 0Fox2Give/PetTracker and SkeeveAN/Aion-DPS-Meter. GPL-3.0.")
             }
         };
