@@ -26,6 +26,7 @@ public sealed class MeterWindow : Window
     {
         this.app = app;
         Title = ArnoA2.App.KdeWindowRules.MeterTitle;
+        Icon = ToolTheme.AppIcon;
         var saved = app.Meter.Settings;
         Width = saved.MeterWidth ?? 380;
         Height = saved.MeterHeight ?? 210;

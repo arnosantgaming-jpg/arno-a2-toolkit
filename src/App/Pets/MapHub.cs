@@ -1,14 +1,12 @@
 using System.Text.Json;
 using ArnoA2.App.Map;
-using ArnoA2.Tracker;
 using Avalonia.Threading;
 
 namespace ArnoA2.App;
 
-public sealed class MapPreferences
+/// <summary>What each tool remembers about its own maps.</summary>
+public class MapLook
 {
-    public string Target { get; set; } = "Unfinished";
-    public int? PetId { get; set; }
     public double MiniOpacity { get; set; } = 0.8;
     public double MiniZoom { get; set; } = 5;
     public double FullZoom { get; set; } = 1;
@@ -21,17 +19,24 @@ public sealed class MapPreferences
     public string MiniShape { get; set; } = "Round";
     /// <summary>Mini-map turns with your camera (the camera direction points up) instead of north up.</summary>
     public bool MiniTurn { get; set; }
+}
+
+/// <summary>The Pet Tracker's map look and target, and what all maps share, the mini-map's look among it.</summary>
+public sealed class MapPreferences : MapLook
+{
+    public string Target { get; set; } = "Unfinished";
+    public int? PetId { get; set; }
     public string? LastRegion { get; set; } = "verteron";
     public bool ReadMinimap { get; set; } = true;
+    public bool LearnSpawns { get; set; }
     /// <summary>Tile pixels per minimap pixel, found by calibration (null = calibrate).</summary>
     public double? MinimapRatio { get; set; }
 }
 
-/// <summary>Shared live state for the map windows: follows the player's position while a map
-/// is open, keeps the farming target and recomputes the ranked hotspots.</summary>
+/// <summary>Where the player is, for every tool's maps: follows the position while a map is
+/// open. What a tool draws on top of it lives in its <see cref="MapLayer"/>.</summary>
 public sealed class MapHub
 {
-    public static readonly string[] Targets = { "Unfinished", "Pinned", "Cogni", "Fera", "Natura", "Varian", "Special", "Pet" };
     readonly AppState app;
     readonly string file;
     readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(300) };
@@ -39,11 +44,10 @@ public sealed class MapHub
     MinimapTracker? minimap;
     (double X, double Y, DateTime At)? minimapFix;
     (double X, double Y)? network;
-    (double X, double Y)? lastHotspotPlayer;
-    string hotspotKey = "";
     public MapHub(AppState app, string root)
     {
         this.app = app;
+        Mini = new SharedMiniMap(this);
         file = Path.Combine(root, "map-settings.json");
         try
         {
@@ -55,10 +59,18 @@ public sealed class MapHub
             Preferences = new();
         }
 
+        Learned = new LearnedSpawns(root);
+        app.Positions.Appeared += (region, entity, npc, x, y) =>
+        {
+            if (Preferences.LearnSpawns && Learned.See(region, entity, npc, x, y))
+                Changed?.Invoke();
+        };
         timer.Tick += (_, _) => Poll();
     }
 
     public MapPreferences Preferences { get; } = new();
+    public SharedMiniMap Mini { get; }
+    public LearnedSpawns Learned { get; }
     public LiveMapView? Live { get; private set; }
     public string? Error { get; private set; }
     /// <summary>The region is remembered, not confirmed by a zone frame or nearby spawns.</summary>
@@ -69,9 +81,6 @@ public sealed class MapHub
     public string Source { get; private set; } = "";
     public bool Precise => Source is "Minimap" or "Exact";
     public string MinimapStatus { get; private set; } = "";
-    public IReadOnlyList<Hotspot> Hotspots { get; private set; } = Array.Empty<Hotspot>();
-    public int TargetSpot { get; set; }
-    public IReadOnlyDictionary<int, double> Weights { get; private set; } = new Dictionary<int, double>();
     public WorldMap Map => WorldMaps.All[Region];
     public SpawnRegion Spawns => SpawnAtlas.Region(Region);
     public event Action? Changed;
@@ -107,6 +116,12 @@ public sealed class MapHub
         catch (Exception)
         {
         }
+    }
+
+    public void ForgetLearned()
+    {
+        Learned.Forget();
+        Changed?.Invoke();
     }
 
     public void SetMinimapReading(bool enabled)
@@ -172,20 +187,8 @@ public sealed class MapHub
         if (Region == region || !WorldMaps.All.ContainsKey(region))
             return;
         Region = region;
-        Refresh(force: true);
+        Changed?.Invoke();
     }
-
-    public void SetTarget(string target, int? petId = null)
-    {
-        Preferences.Target = target;
-        Preferences.PetId = petId;
-        Save();
-        TargetSpot = 0;
-        Refresh(force: true);
-    }
-
-    /// <summary>The collection or settings changed: re-rank farming spots.</summary>
-    public void CollectionChanged() => Refresh(force: false);
 
     void Poll()
     {
@@ -224,65 +227,8 @@ public sealed class MapHub
             Source = "";
         }
 
-        Refresh(force: false);
-    }
-
-    void Refresh(bool force)
-    {
-        var collection = app.Engine.Collection;
-        var pins = app.Engine.Settings.Pins;
-        var weights = new Dictionary<int, double>();
-        foreach (var entry in GameData.Instance.Pets.Values)
-        {
-            var pet = collection.Pets.GetValueOrDefault(entry.Id);
-            bool wanted = Preferences.Target switch
-            {
-                "Pinned" => pins.Contains(entry.Id),
-                "Pet" => Preferences.PetId == entry.Id,
-                "Unfinished" => true,
-                string family => entry.Family.ToString() == family
-            };
-            double weight = wanted ? FarmingHotspots.Weight(pet) : 0;
-            if (weight > 0)
-                weights[entry.Id] = weight;
-        }
-
-        string key = Region + "|" + string.Join(",", weights.OrderBy(w => w.Key).Select(w => w.Key + ":" + w.Value.ToString("F2")));
-        bool moved = Player is { } p && (lastHotspotPlayer is not { } last || Math.Sqrt(Math.Pow(p.X - last.X, 2) + Math.Pow(p.Y - last.Y, 2)) * Map.Metres > 40);
-        if (force || moved || key != hotspotKey)
-        {
-            hotspotKey = key;
-            lastHotspotPlayer = Player;
-            Weights = weights;
-            Hotspots = FarmingHotspots.Find(Spawns, Map, weights, Player);
-            if (TargetSpot >= Hotspots.Count)
-                TargetSpot = 0;
-        }
-
         Changed?.Invoke();
     }
 
-    public Hotspot? Target => Hotspots.Count > TargetSpot ? Hotspots[TargetSpot] : null;
-
-    public string PetNames(IEnumerable<int> ids, int limit = 3)
-    {
-        var names = ids.Select(id => GameData.Instance.Pets.GetValueOrDefault(id)?.Name).Where(n => n != null).ToArray();
-        return names.Length <= limit ? string.Join(", ", names) : string.Join(", ", names.Take(limit)) + $" +{names.Length - limit}";
-    }
-
     public static string Compass(double bearing) => new[] { "N", "NE", "E", "SE", "S", "SW", "W", "NW" }[(int)Math.Round(bearing / 45) % 8];
-
-    public string Guidance()
-    {
-        if (Live?.Region == null && Live != null && !Assumed)
-            return Live.Zone == 0 ? "Waiting for zone (log in with the tracker open)" : $"No map for zone {Live.Zone}";
-        if (Target is not { } spot)
-            return Weights.Count == 0 ? "No pets match this target" : "No spawn data for these pets here";
-        if (Player is not { } player)
-            return $"Best spot: {PetNames(spot.PetIds, 2)} · position unknown";
-        double distance = spot.DistanceMetres ?? 0;
-        return distance < FarmingHotspots.RadiusMetres
-            ? $"You're in the spot · {PetNames(spot.PetIds, 2)}"
-            : $"{distance:F0} m {Compass(FarmingHotspots.Bearing(player, (spot.X, spot.Y)))} · {PetNames(spot.PetIds, 2)}";
-    }
 }

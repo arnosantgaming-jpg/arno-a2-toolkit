@@ -18,7 +18,7 @@ public sealed class TrackerWindow : Window
 {
     const string Columns = "3,22,2*,58,36,46,*";
     readonly AppState app;
-    readonly MapHub maps;
+    readonly PetLayer maps;
     readonly StackPanel rows = new();
     readonly TextBlock status = new() { FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(2, 3, 2, 0) };
     readonly TextBlock session = new() { FontSize = 9.5, Foreground = Ui.Muted, Margin = new Thickness(6, 3, 2, 0) };
@@ -26,15 +26,15 @@ public sealed class TrackerWindow : Window
     readonly Border recent, nearby, hideMaxed, backdrop = new() { BorderBrush = Ui.Line, BorderThickness = new Thickness(1) };
     readonly Image art = new() { Stretch = Stretch.UniformToFill };
     readonly DispatcherTimer toastTimer = new() { Interval = TimeSpan.FromSeconds(6) };
-    MiniMapWindow? miniMap;
     FullMapWindow? fullMap;
     string rendered = "";
 
-    public TrackerWindow(AppState app, MapHub maps)
+    public TrackerWindow(AppState app, PetLayer maps)
     {
         this.app = app;
         this.maps = maps;
         Title = KdeWindowRules.TrackerTitle;
+        Icon = ToolTheme.AppIcon;
         var saved = app.Engine.Settings;
         Width = saved.TrackerWidth ?? 380;
         Height = saved.TrackerHeight ?? 210;
@@ -118,7 +118,7 @@ public sealed class TrackerWindow : Window
             app.Changed -= Refresh;
             app.Noticed -= Notice;
             toastTimer.Stop();
-            miniMap?.Close();
+            maps.Hub.Mini.Leave(maps);
             fullMap?.Close();
         };
         Refresh();
@@ -149,20 +149,9 @@ public sealed class TrackerWindow : Window
         art.IsVisible = app.Engine.Settings.TrackerArt;
     }
 
-    public void OpenMiniMap()
-    {
-        if (miniMap == null)
-        {
-            miniMap = new MiniMapWindow(maps);
-            miniMap.Closed += (_, _) => miniMap = null;
-            miniMap.Show();
-        }
+    public void ToggleMiniMap() => maps.Hub.Mini.Toggle(maps);
 
-        miniMap.Activate();
-    }
-
-    public void SetMiniMapShape(bool round) => miniMap?.ApplyShape(round);
-    public MiniMapWindow? MiniMap => miniMap;
+    public MiniMapWindow? MiniMap => maps.Hub.Mini.Window;
     public FullMapWindow? FullMap => fullMap;
 
     public void OpenFullMap()

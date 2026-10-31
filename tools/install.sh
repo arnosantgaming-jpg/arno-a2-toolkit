@@ -27,7 +27,9 @@ if [[ -f "$app/capture/arno-a2-capture" ]] && cmp -s "$app/capture/arno-a2-captu
 fi
 rm -rf -- "$app"
 mv -- "$app.new" "$app"
-cp -- "$app/icon.png" "$share/icons/hicolor/256x256/apps/$id.png"
+# A new name whenever the icon changes: KDE keeps showing a cached picture under the old one.
+rm -f -- "$share/icons/hicolor/256x256/apps/$id.png"
+cp -- "$app/icon.png" "$share/icons/hicolor/256x256/apps/$id-logo.png"
 
 cat > "$bin" <<LAUNCH
 #!/usr/bin/env bash
@@ -47,7 +49,7 @@ Name=Arno's A2 Toolkit
 GenericName=AION 2 toolkit
 Comment=Pets, DPS meter and farming tools for AION 2
 Exec=$bin
-Icon=$id
+Icon=$id-logo
 Terminal=false
 Categories=Game;
 StartupWMClass=arno-a2-toolkit"
@@ -57,6 +59,8 @@ if [[ "$autostart" == yes ]]; then
     printf '%s\nX-KDE-autostart-after=panel\n' "$entry" > "$config/autostart/$id.desktop"
 fi
 command -v update-desktop-database >/dev/null && update-desktop-database "$share/applications" 2>/dev/null || true
+touch "$share/icons/hicolor"
+command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
 
 if ! getcap "$app/capture/arno-a2-capture" | grep -q cap_net_raw; then
     echo "Granting packet-capture permission to the capture program only:"

@@ -12,7 +12,7 @@ namespace ArnoA2.App;
 public static class KdeWindowRules
 {
     const string Class = "arno-a2-toolkit";
-    public const string TrackerTitle = "Arno's A2 Toolkit · pets", MiniMapTitle = "Arno's A2 Toolkit · mini-map", MeterTitle = "Arno's A2 Toolkit · DPS meter";
+    public const string TrackerTitle = "Arno's A2 Toolkit · pets", MiniMapTitle = "Arno's A2 Toolkit · mini-map", MeterTitle = "Arno's A2 Toolkit · DPS meter", ResourceTitle = "Arno's A2 Toolkit · resources", CubeTitle = "Arno's A2 Toolkit · hidden cubes";
     static readonly (string Group, (string Key, string Value)[] Entries)[] Rules =
     {
         ("arno-a2-toolkit-minimap", new[]
@@ -40,6 +40,20 @@ public static class KdeWindowRules
             ("Description", "Arno's A2 Toolkit pets above fullscreen games (added by Arno's A2 Toolkit)"),
             ("wmclass", Class), ("wmclassmatch", "1"), ("wmclasscomplete", "false"),
             ("title", TrackerTitle), ("titlematch", "1"),
+            ("layer", "overlay"), ("layerrule", "2"), ("above", "true"), ("aboverule", "2")
+        }),
+        ("arno-a2-toolkit-resources", new[]
+        {
+            ("Description", "Arno's A2 Toolkit resources above fullscreen games (added by Arno's A2 Toolkit)"),
+            ("wmclass", Class), ("wmclassmatch", "1"), ("wmclasscomplete", "false"),
+            ("title", ResourceTitle), ("titlematch", "1"),
+            ("layer", "overlay"), ("layerrule", "2"), ("above", "true"), ("aboverule", "2")
+        }),
+        ("arno-a2-toolkit-cubes", new[]
+        {
+            ("Description", "Arno's A2 Toolkit hidden cubes above fullscreen games (added by Arno's A2 Toolkit)"),
+            ("wmclass", Class), ("wmclassmatch", "1"), ("wmclasscomplete", "false"),
+            ("title", CubeTitle), ("titlematch", "1"),
             ("layer", "overlay"), ("layerrule", "2"), ("above", "true"), ("aboverule", "2")
         })
     };

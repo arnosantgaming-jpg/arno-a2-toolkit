@@ -21,6 +21,9 @@ public sealed class Positions
 
     public int Zone { get; private set; }
 
+    /// <summary>A pet or other creature came into view: region, entity, NPC and its world place.</summary>
+    public event Action<string, int, int, float, float>? Appeared;
+
     public void Clear()
     {
         around.Clear();
@@ -62,6 +65,8 @@ public sealed class Positions
                     mobs.Clear();
                 mobs[appeared.Entity] = new(appeared.Entity, appeared.Npc, x, y, now);
                 Moved(appeared.Entity, x, y, now);
+                if (Region() is { } region)
+                    Appeared?.Invoke(region, appeared.Entity, appeared.Npc, x, y);
                 break;
             case EntityRemoved removed:
                 mobs.Remove(removed.Entity);

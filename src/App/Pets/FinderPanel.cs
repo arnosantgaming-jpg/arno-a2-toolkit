@@ -10,7 +10,7 @@ namespace ArnoA2.App;
 public sealed class FinderPanel : UserControl
 {
     readonly AppState app;
-    readonly MapHub maps;
+    readonly PetLayer maps;
     readonly TextBox search = new() { PlaceholderText = "Search pets, creatures, regions or \"merchant\"…" };
     readonly CheckBox hideMaxed = new() { Content = "Hide maxed", IsChecked = true };
     readonly ComboBox family = new() { ItemsSource = new[] { "All families", "Cogni", "Fera", "Natura", "Varian", "Special" }, SelectedIndex = 0 };
@@ -19,7 +19,7 @@ public sealed class FinderPanel : UserControl
     readonly Action showMap;
     string rendered = "";
 
-    public FinderPanel(AppState app, MapHub maps, Action showMap)
+    public FinderPanel(AppState app, PetLayer maps, Action showMap)
     {
         this.app = app;
         this.maps = maps;

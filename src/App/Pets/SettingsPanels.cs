@@ -9,21 +9,21 @@ namespace ArnoA2.App;
 /// <summary>The Pet Tracker's drawer: what it tracks and how the mini-map behaves.</summary>
 public sealed class PetSettingsPanel : UserControl
 {
-    public PetSettingsPanel(AppState app, MapHub maps)
+    public PetSettingsPanel(AppState app, PetLayer layer)
     {
         var engine = app.Engine;
         var s = engine.Settings;
         var panel = new StackPanel { Spacing = 10 };
 
         panel.Children.Add(Ui.Heading("Tracking"));
-        panel.Children.Add(Choice("Order", new[] { "Unfinished first", "Recent only", "Closest to next rank" }, s.Sort, v => engine.ChangeSettings(x => x.Sort = v)));
-        panel.Children.Add(Number("Rows shown", s.RowLimit, 1, 20, v => engine.ChangeSettings(x => x.RowLimit = v)));
-        panel.Children.Add(Toggle("Hide recent pets after a while", s.ExpireInactive, v => engine.ChangeSettings(x => x.ExpireInactive = v)));
-        panel.Children.Add(Number("…after seconds", s.InactiveSeconds, 5, 600, v => engine.ChangeSettings(x => x.InactiveSeconds = v)));
-        panel.Children.Add(Number("Nearby pets stay for seconds", s.NearbyStaleSeconds, 10, 600, v => engine.ChangeSettings(x => x.NearbyStaleSeconds = v)));
-        panel.Children.Add(Number("Pinned pets (max)", s.PinLimit, 1, 5, v => engine.ChangeSettings(x => x.PinLimit = v)));
-        panel.Children.Add(Toggle("Black Cloud Merchant suggestions", s.MerchantSuggestions, v => engine.ChangeSettings(x => x.MerchantSuggestions = v)));
-        panel.Children.Add(Toggle("New characters share this account's collection", s.NewCharactersJoin, v => engine.ChangeSettings(x => x.NewCharactersJoin = v)));
+        panel.Children.Add(Ui.Choice("Order", new[] { "Unfinished first", "Recent only", "Closest to next rank" }, s.Sort, v => engine.ChangeSettings(x => x.Sort = v)));
+        panel.Children.Add(Ui.Number("Rows shown", s.RowLimit, 1, 20, v => engine.ChangeSettings(x => x.RowLimit = v)));
+        panel.Children.Add(Ui.Toggle("Hide recent pets after a while", s.ExpireInactive, v => engine.ChangeSettings(x => x.ExpireInactive = v)));
+        panel.Children.Add(Ui.Number("…after seconds", s.InactiveSeconds, 5, 600, v => engine.ChangeSettings(x => x.InactiveSeconds = v)));
+        panel.Children.Add(Ui.Number("Nearby pets stay for seconds", s.NearbyStaleSeconds, 10, 600, v => engine.ChangeSettings(x => x.NearbyStaleSeconds = v)));
+        panel.Children.Add(Ui.Number("Pinned pets (max)", s.PinLimit, 1, 5, v => engine.ChangeSettings(x => x.PinLimit = v)));
+        panel.Children.Add(Ui.Toggle("Black Cloud Merchant suggestions", s.MerchantSuggestions, v => engine.ChangeSettings(x => x.MerchantSuggestions = v)));
+        panel.Children.Add(Ui.Toggle("New characters share this account's collection", s.NewCharactersJoin, v => engine.ChangeSettings(x => x.NewCharactersJoin = v)));
         panel.Children.Add(Ui.Note("Pet collections are account-wide in AION 2. Turn this off only if you play several accounts."));
 
         panel.Children.Add(Ui.Heading("Look"));
@@ -42,36 +42,30 @@ public sealed class PetSettingsPanel : UserControl
         look.Children.Add(opacity);
         panel.Children.Add(new TextBlock { Text = "Background opacity" });
         panel.Children.Add(look);
-        panel.Children.Add(Toggle("Hide background image", !s.TrackerArt, v =>
+        panel.Children.Add(Ui.Toggle("Hide background image", !s.TrackerArt, v =>
         {
             engine.ChangeSettings(x => x.TrackerArt = !v);
             App.Tracker?.ApplyOpacity();
         }));
         panel.Children.Add(Ui.Note("Lower opacity lets the game show through, and fades the pet with it."));
 
-        panel.Children.Add(Ui.Heading("Mini-map"));
-        panel.Children.Add(Choice("Shape", new[] { "Circle", "Rectangle" }, maps.Preferences.MiniShape == "Rectangle" ? "Rectangle" : "Circle", v =>
+        MiniMapSettings.Add(panel, layer.Hub);
+
+        panel.Children.Add(Ui.Heading("Learned spawns"));
+        var learned = Ui.Note("");
+        void Count() => learned.Text = $"{layer.Hub.Learned.Count} spawns learned from play, shown with a white edge. A place counts once two different mobs appear there, away from every known spawn. This can only add spots: one a patch removed stays until the data is refreshed.";
+        Count();
+        panel.Children.Add(Ui.Toggle("Learn new pet spawns while playing", layer.Hub.Preferences.LearnSpawns, v =>
         {
-            maps.Preferences.MiniShape = v == "Rectangle" ? "Rectangle" : "Round";
-            maps.Save();
-            App.Tracker?.SetMiniMapShape(v != "Rectangle");
+            layer.Hub.Preferences.LearnSpawns = v;
+            layer.Hub.Save();
         }));
-        double current = App.Tracker?.MiniMap?.Width ?? maps.Preferences.MiniWidth;
-        string[] sizes = { "50%", "75%", "100%" };
-        panel.Children.Add(Choice("Size", sizes, sizes[current < 190 ? 0 : current < 265 ? 1 : 2], v =>
+        panel.Children.Add(Ui.Button("Forget learned spawns", () =>
         {
-            double size = MiniMapWindow.FullSize * int.Parse(v.TrimEnd('%')) / 100;
-            maps.Preferences.MiniWidth = size;
-            maps.Preferences.MiniHeight = size + MiniMapWindow.Footer;
-            maps.Save();
-            App.Tracker?.MiniMap?.Resize(size);
+            layer.Hub.ForgetLearned();
+            Count();
         }));
-        panel.Children.Add(Toggle("Read the in-game minimap for a precise position", maps.Preferences.ReadMinimap, v =>
-        {
-            maps.SetMinimapReading(v);
-            maps.Save();
-        }));
-        panel.Children.Add(Ui.Note("Reads only the minimap corner of the game window (about 5% of one CPU core). Verteron, Altgard and the Abyss."));
+        panel.Children.Add(learned);
 
         panel.Children.Add(Ui.Heading("Account"));
         var name = new TextBox { Text = engine.Profile.Name };
@@ -85,43 +79,37 @@ public sealed class PetSettingsPanel : UserControl
 
         Content = panel;
     }
+}
 
-    static Control Toggle(string label, bool value, Action<bool> changed)
+/// <summary>The settings of the mini-map every tool shares.</summary>
+public static class MiniMapSettings
+{
+    public static void Add(StackPanel panel, MapHub hub)
     {
-        var box = new CheckBox { Content = label, IsChecked = value };
-        box.IsCheckedChanged += (_, _) => changed(box.IsChecked == true);
-        return box;
-    }
-
-    static Control Number(string label, int value, int min, int max, Action<int> changed)
-    {
-        var input = new NumericUpDown { Value = value, Minimum = min, Maximum = max, Increment = 1, FormatString = "0", Width = 130 };
-        input.ValueChanged += (_, _) =>
+        var look = hub.Preferences;
+        panel.Children.Add(Ui.Heading("Mini-map"));
+        panel.Children.Add(Ui.Choice("Shape", new[] { "Circle", "Rectangle" }, look.MiniShape == "Rectangle" ? "Rectangle" : "Circle", v =>
         {
-            if (input.Value is decimal v)
-                changed((int)v);
-        };
-        return Row(label, input);
-    }
-
-    static Control Choice(string label, string[] options, string value, Action<string> changed)
-    {
-        var box = new ComboBox { ItemsSource = options, SelectedItem = options.Contains(value) ? value : options[0], Width = 200 };
-        box.SelectionChanged += (_, _) =>
+            look.MiniShape = v == "Rectangle" ? "Rectangle" : "Round";
+            hub.Save();
+            hub.Mini.Window?.ApplyShape(v != "Rectangle");
+        }));
+        double current = hub.Mini.Window?.Width ?? look.MiniWidth;
+        string[] sizes = { "50%", "75%", "100%" };
+        panel.Children.Add(Ui.Choice("Size", sizes, sizes[current < 190 ? 0 : current < 265 ? 1 : 2], v =>
         {
-            if (box.SelectedItem is string v)
-                changed(v);
-        };
-        return Row(label, box);
-    }
-
-    static Control Row(string label, Control input)
-    {
-        var row = new DockPanel();
-        DockPanel.SetDock(input, Dock.Right);
-        row.Children.Add(input);
-        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
-        return row;
+            double size = MiniMapWindow.FullSize * int.Parse(v.TrimEnd('%')) / 100;
+            look.MiniWidth = size;
+            look.MiniHeight = size + MiniMapWindow.Footer;
+            hub.Save();
+            hub.Mini.Window?.Resize(size);
+        }));
+        panel.Children.Add(Ui.Toggle("Read the in-game minimap for a precise position", hub.Preferences.ReadMinimap, v =>
+        {
+            hub.SetMinimapReading(v);
+            hub.Save();
+        }));
+        panel.Children.Add(Ui.Note("Reads only the minimap corner of the game window (about 5% of one CPU core). Verteron, Altgard and the Abyss."));
     }
 }
 

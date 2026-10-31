@@ -16,6 +16,8 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="../../data/FarmingSpawns.json" LogicalName="spawns.json" />
+    <EmbeddedResource Include="../../data/ResourceNodes.json" LogicalName="resources.json" />
+    <EmbeddedResource Include="../../data/CubeSpots.json" LogicalName="cubes.json" />
     <Content Include="../../assets/classes/*.png" Link="classes/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/portraits/*.png" Link="portraits/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/crystals/*.png" Link="crystals/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

@@ -37,6 +37,44 @@ public static class Ui
     public static TextBlock Heading(string text, double size = 18) => new() { Text = text, FontSize = size, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 2) };
     public static TextBlock Note(string text) => new() { Text = text, FontSize = 11.5, Foreground = Muted, TextWrapping = TextWrapping.Wrap };
 
+    public static Control Toggle(string label, bool value, Action<bool> changed)
+    {
+        var box = new CheckBox { Content = label, IsChecked = value };
+        box.IsCheckedChanged += (_, _) => changed(box.IsChecked == true);
+        return box;
+    }
+
+    public static Control Number(string label, int value, int min, int max, Action<int> changed)
+    {
+        var input = new NumericUpDown { Value = value, Minimum = min, Maximum = max, Increment = 1, FormatString = "0", Width = 130 };
+        input.ValueChanged += (_, _) =>
+        {
+            if (input.Value is decimal v)
+                changed((int)v);
+        };
+        return Row(label, input);
+    }
+
+    public static Control Choice(string label, string[] options, string value, Action<string> changed)
+    {
+        var box = new ComboBox { ItemsSource = options, SelectedItem = options.Contains(value) ? value : options[0], Width = 200 };
+        box.SelectionChanged += (_, _) =>
+        {
+            if (box.SelectedItem is string v)
+                changed(v);
+        };
+        return Row(label, box);
+    }
+
+    static Control Row(string label, Control input)
+    {
+        var row = new DockPanel();
+        DockPanel.SetDock(input, Dock.Right);
+        row.Children.Add(input);
+        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+        return row;
+    }
+
     static readonly Dictionary<string, Bitmap?> images = new();
 
     public static Image Picture(string relative, double size)

@@ -40,6 +40,7 @@ public sealed class BreakdownWindow : Window
     {
         this.player = player;
         Title = "Arno's A2 Toolkit · skills";
+        Icon = ToolTheme.AppIcon;
         Width = 440;
         Height = 360;
         MinWidth = 340;

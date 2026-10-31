@@ -52,12 +52,13 @@ foreach (var (pet, souls) in new[] { (dratona, 3), (spirit, 2) })
 
 state.Positions.Observe(new ZoneEntered(1010, -72190f, -69614f), null, now);
 var maps = new MapHub(state, data);
-var tracker = new TrackerWindow(state, maps);
+var petMap = new PetLayer(state, maps);
+var tracker = new TrackerWindow(state, petMap);
 tracker.Show();
 Save(tracker, "tracker.png");
 Check(Text(tracker).Contains("Dratona") && Text(tracker).Contains("43/75") && Text(tracker).Contains("Session: 5 souls") && Text(tracker).Contains("Cogni"), "tracker lists recent pets with type, souls and the session");
 
-var finder = new Window { Width = 640, Height = 760, Content = new FinderPanel(state, maps, () => { }) };
+var finder = new Window { Width = 640, Height = 760, Content = new FinderPanel(state, petMap, () => { }) };
 finder.Show();
 finder.GetVisualDescendants().OfType<TextBox>().First().Text = "Dratona";
 Dispatcher.UIThread.RunJobs();
@@ -78,7 +79,7 @@ Check(File.ReadAllText(Path.Combine(home, "arno-a2-toolkit", "meter", "history",
 var hub = new HubWindow(state, maps);
 hub.Show();
 Save(hub, "hub.png");
-Check(Text(hub).Contains("DPS Meter") && Text(hub).Contains("Pet Tracker") && Text(hub).Contains("Hidden Cube Tracker") && Text(hub).Contains("Coming soon"), "the main window lists the tools");
+Check(Text(hub).Contains("DPS Meter") && Text(hub).Contains("Pet Tracker") && Text(hub).Contains("Hidden Cube Tracker") && !Text(hub).Contains("Coming soon"), "the main window lists the tools");
 hub.OpenPets();
 hub.OpenMeter();
 Dispatcher.UIThread.RunJobs();
@@ -96,15 +97,170 @@ hub.ShowDrawer(HubWindow.FinderDrawer);
 Thread.Sleep(400);
 Save(hub, "hub-pets-drawer.png");
 Check(Text(hub).Contains("pets"), "the finder opens in a drawer");
+hub.OpenResources();
+Dispatcher.UIThread.RunJobs();
+Check(Text(hub).Contains("Resource Tracker") && Text(hub).Contains("Hidden Cube Tracker"), "the Resource Tracker launches from its card");
+hub.ShowDrawer(HubWindow.ResourceDrawer);
+Thread.Sleep(400);
+Save(hub, "hub-resource-drawer.png");
+Check(Text(hub).Contains("Resource Tracker Settings") && Text(hub).Contains("Shellfish") && Text(hub).Contains("Mini-map"), "the Resource Tracker's settings open in a drawer");
+hub.ShowDrawer(HubWindow.ResourceMapDrawer);
+Thread.Sleep(400);
+Save(hub, "hub-resource-map.png");
+Check(Text(hub).Contains("Gather") && Text(hub).Contains("Best spots") && Text(hub).Contains("nodes"), "the resource map opens in a drawer with ranked nodes");
+hub.OpenCubes();
+Dispatcher.UIThread.RunJobs();
+hub.ShowDrawer(HubWindow.CubeDrawer);
+Thread.Sleep(400);
+Save(hub, "hub-cube-drawer.png");
+Check(Text(hub).Contains("Hidden Cube Tracker Settings") && Text(hub).Contains("Skip checked spots"), "the Hidden Cube Tracker's settings open in a drawer");
+hub.ShowDrawer(HubWindow.CubeMapDrawer);
+Thread.Sleep(400);
+Save(hub, "hub-cube-map.png");
+Check(Text(hub).Contains("Best spots") && Text(hub).Contains("spots"), "the cube map opens in a drawer with ranked spots");
 hub.Close();
 
-var settings = new Window { Width = 500, Height = 720, Content = new ScrollViewer { Content = new StackPanel { Children = { new PetSettingsPanel(state, maps), new ToolkitSettingsPanel(state) } } } };
+foreach (var key in ArnoA2.App.Map.WorldMaps.Order)
+{
+    var nodes = ArnoA2.App.Map.ResourceAtlas.Region(key);
+    var worldMap = ArnoA2.App.Map.WorldMaps.All[key];
+    var tiles = ArnoA2.App.Map.SpawnAtlas.Region(key).Tiles.Select(t => (t.Column, t.Row)).ToHashSet();
+    int inside = nodes.Count(n => tiles.Contains(((int)(n.X * worldMap.Grid), (int)(n.Y * worldMap.Grid))));
+    Check(nodes.Count > 200 && inside == nodes.Count, $"every {key} node lands on a map tile ({nodes.Count})");
+}
+Check(ArnoA2.App.Map.ResourceAtlas.Names.All(n => ArnoA2.App.Map.ResourceAtlas.Kinds.Any(k => k.Kind == n.Kind)), "every node name has a kind");
+
+Directory.CreateDirectory(data);
+var resources = new ResourceLayer(maps, data);
+var gather = new ResourceWindow(resources);
+gather.Show();
+Dispatcher.UIThread.RunJobs();
+maps.Accept(state.Positions.View(now));
+Dispatcher.UIThread.RunJobs();
+Save(gather, "resources.png");
+Check(Text(gather).Contains("Odyle") && Text(gather).Contains("Shellfish") && Text(gather).Contains(" m "), "the Resource Tracker lists each kind with the closest node");
+Check(resources.Hotspots.Count > 0 && resources.Target != null && resources.Guidance().Contains(" m "), "the Resource Tracker ranks nearby spots");
+resources.Choose("Odyle", false);
+Check(!resources.Shows("Odyle") && resources.Dots.Count > 0 && resources.Dots.Count < ArnoA2.App.Map.ResourceAtlas.Region("verteron").Count, "hiding a kind takes its dots off the map");
+foreach (var kind in ArnoA2.App.Map.ResourceAtlas.Kinds.Select(k => k.Kind))
+    resources.Choose(kind, false);
+Check(resources.Hotspots.Count == 0 && resources.Guidance() == "Choose something to gather", "with nothing chosen the tool says so");
+foreach (var kind in ArnoA2.App.Map.ResourceAtlas.Kinds.Select(k => k.Kind))
+    resources.Choose(kind, true);
+Check(resources.Dots.Select(d => d.Shape).Distinct().Count() == 7, "each kind of resource has its marker shape");
+Check(petMap.Dots.All(d => d.Shape == MarkerShape.Paw), "pet spawns draw as paws");
+Check(maps.Mini.Active.All(l => l != resources), "launching a tool doesn't put it on the mini-map");
+if (maps.Mini.Active.Count == 0)
+    tracker.ToggleMiniMap();
+gather.ToggleMiniMap();
+gather.MiniMap!.StopCamera();
+Dispatcher.UIThread.RunJobs();
+Thread.Sleep(100);
+Save(gather.MiniMap, "resource-minimap.png");
+Check(maps.Mini.Active.Count == 2 && maps.Mini.Active[0] == petMap && maps.Mini.Active[1] == resources, "the pet tracker and the resource tracker share one mini-map, blue ring first");
+var shared = gather.MiniMap;
+gather.Close();
+Dispatcher.UIThread.RunJobs();
+Check(maps.Mini.Window == shared && maps.Mini.Active.Count == 1, "the mini-map stays for the tool still running");
+tracker.Close();
+Dispatcher.UIThread.RunJobs();
+Check(gather.MiniMap == null && File.Exists(Path.Combine(data, "resource-settings.json")), "closing the tool closes its mini-map and saves");
+foreach (var (key, count) in new[] { ("verteron", 1440), ("altgard", 1371) })
+{
+    var cubeSpots = ArnoA2.App.Map.CubeAtlas.Region(key);
+    var worldMap = ArnoA2.App.Map.WorldMaps.All[key];
+    var tiles = ArnoA2.App.Map.SpawnAtlas.Region(key).Tiles.Select(t => (t.Column, t.Row)).ToHashSet();
+    Check(cubeSpots.Count == count && cubeSpots.All(c => tiles.Contains(((int)(c.X * worldMap.Grid), (int)(c.Y * worldMap.Grid)))), $"every {key} cube spot lands on a map tile ({cubeSpots.Count})");
+}
+Check(ArnoA2.App.Map.CubeAtlas.Region("abyss").Count == 0, "the Abyss has no cube data");
+
+maps.SetRegion("verteron");
+var tracked = new TrackerWindow(state, petMap);
+tracked.Show();
+var gathering = new ResourceWindow(resources);
+gathering.Show();
+var cubeMap = new CubeLayer(maps, data);
+var seek = new CubeWindow(cubeMap);
+seek.Show();
+Dispatcher.UIThread.RunJobs();
+Check(maps.Mini.Window == null, "launching tools doesn't open the mini-map");
+maps.Accept(state.Positions.View(now));
+maps.SetRegion("verteron");
+Dispatcher.UIThread.RunJobs();
+Save(seek, "cubes.png");
+Check(cubeMap.Hotspots.Count > 0 && cubeMap.Dots.All(d => d.Shape == MarkerShape.Cube) && Text(seek).Contains(" m "), "the Hidden Cube Tracker ranks spots with distances");
+Check(cubeMap.Names(cubeMap.Hotspots[0].Ids).Length > 0 && !cubeMap.Names(cubeMap.Hotspots[0].Ids).Contains("Hidden"), "spots are named by their area");
+var checkedSpot = cubeMap.Hotspots[0];
+cubeMap.Check(checkedSpot);
+Check(cubeMap.CheckedCount > 0 && !cubeMap.Hotspots.Any(h => Math.Abs(h.X - checkedSpot.X) < 1e-9 && Math.Abs(h.Y - checkedSpot.Y) < 1e-9), "a checked spot leaves the ranking");
+cubeMap.Preferences.ShowChecked = false;
+cubeMap.Redraw();
+Check(cubeMap.Dots.Count == ArnoA2.App.Map.CubeAtlas.Region("verteron").Count - cubeMap.CheckedCount, "checked spots can be hidden from the map");
+cubeMap.Preferences.ShowChecked = true;
+cubeMap.ClearChecked();
+Check(cubeMap.CheckedCount == 0, "checked spots can be forgotten");
+tracked.ToggleMiniMap();
+gathering.ToggleMiniMap();
+seek.ToggleMiniMap();
+seek.MiniMap!.StopCamera();
+Dispatcher.UIThread.RunJobs();
+Thread.Sleep(100);
+Save(seek.MiniMap, "cube-minimap.png");
+Check(maps.Mini.Active.Select(l => l.Ring).SequenceEqual(new[] { 0, 1, 2 }), "all three tools share the mini-map, blue, green, purple");
+gathering.ToggleMiniMap();
+Check(maps.Mini.Active.Select(l => l.Ring).SequenceEqual(new[] { 0, 2 }), "a tool's Mini-map button takes it off again");
+seek.Close();
+gathering.Close();
+tracked.Close();
+Dispatcher.UIThread.RunJobs();
+Check(maps.Mini.Window == null, "the mini-map closes with the last tool");
+
+maps.Preferences.LearnSpawns = true;
+maps.ForgetLearned();
+var soldier = ArnoA2.App.Map.SpawnAtlas.Region("verteron").Points[0];
+var verteronMap = ArnoA2.App.Map.WorldMaps.All["verteron"];
+var newPlace = ArnoA2.App.Map.SpawnAtlas.Region("verteron").Points.Where(p => p.NpcId == soldier.NpcId).Aggregate(soldier, (a, _) => a) with { X = 0.05, Y = 0.05 };
+var (farX, farY) = verteronMap.World(newPlace.X, newPlace.Y);
+var (nearX, nearY) = verteronMap.World(soldier.X, soldier.Y);
+var mobMetre = 100f;
+state.Positions.Observe(new ZoneEntered(1010, null, null), null, now);
+void Appear(int entity, double x, double y) => state.Positions.Observe(new NpcAppeared(entity, soldier.NpcId, (float)x, (float)y), null, now);
+Appear(90001, nearX + 20 * mobMetre, nearY);
+Appear(90002, nearX + 20 * mobMetre, nearY);
+Check(maps.Learned.Count == 0, "mobs near a known spawn teach nothing");
+Appear(90003, farX, farY);
+Check(maps.Learned.Count == 0, "one sighting is not a spawn");
+Appear(90003, farX, farY);
+Check(maps.Learned.Count == 0, "the same mob twice is not a spawn");
+Appear(90004, farX + 100 * mobMetre, farY);
+Check(maps.Learned.Count == 0, "a second mob 100 m away is a wanderer, not the same spawn");
+Appear(90005, farX + 5 * mobMetre, farY);
+Check(maps.Learned.Count == 1, "a second mob at the same new place teaches a spawn");
+Appear(90006, farX, farY);
+Appear(90007, farX, farY);
+Check(maps.Learned.Count == 1, "a learned place isn't learned twice");
+Check(new ArnoA2.App.Map.LearnedSpawns(data).Count == 1, "learned spawns survive a restart");
+petMap.SetTarget("Pet", soldier.PetId);
+Check(petMap.Dots.Count(d => d.Learned) == 1, "a learned spawn shows on the pet maps, marked");
+maps.Preferences.LearnSpawns = false;
+Appear(90008, farX + 400 * mobMetre, farY);
+Appear(90009, farX + 400 * mobMetre, farY);
+Check(maps.Learned.Count == 1, "learning can be turned off");
+maps.Preferences.LearnSpawns = true;
+maps.ForgetLearned();
+Check(maps.Learned.Count == 0 && petMap.Dots.All(d => !d.Learned), "learned spawns can be forgotten");
+petMap.SetTarget("Unfinished");
+
+var reloaded = new ResourceLayer(maps, data);
+Check(reloaded.Preferences.Kinds.Count == ArnoA2.App.Map.ResourceAtlas.Kinds.Length, "the choice of resources is remembered");
+
+var settings = new Window { Width = 500, Height = 720, Content = new ScrollViewer { Content = new StackPanel { Children = { new PetSettingsPanel(state, petMap), new ToolkitSettingsPanel(state) } } } };
 settings.Show();
 Save(settings, "settings.png");
 Check(Text(settings).Contains("Mini-map") && Text(settings).Contains("Capture"), "settings sections");
 
 maps.Preferences.MiniShape = "Round";
-tracker.OpenMiniMap();
+tracker.ToggleMiniMap();
 var mini = tracker.MiniMap!;
 mini.StopCamera(); // headings below are set by hand
 mini.Resize(MiniMapWindow.FullSize / 2);
@@ -130,7 +286,7 @@ slider.Value = 0.4;
 Check(Math.Abs(mini.GetVisualDescendants().OfType<MapCanvas>().Single().Opacity - 0.4) < 0.01 && Math.Abs(slider.GetVisualAncestors().OfType<Border>().First().Opacity - 1) < 0.01, "opacity fades the whole map, not the controls");
 Save(mini, "minimap-faded.png");
 slider.Value = 0.8;
-tracker.SetMiniMapShape(false);
+mini.ApplyShape(false);
 mini.Width = 380;
 mini.Height = 260;
 Thread.Sleep(200);
@@ -160,7 +316,7 @@ Save(mini, "minimap-scrolling.png");
 // map can turn about the player so that way points up.
 var canvas = mini.Canvas;
 slider.Value = 1;
-tracker.SetMiniMapShape(true);
+mini.ApplyShape(true);
 mini.Width = 300;
 mini.Height = 330;
 for (int i = 0; i < 5; i++)
@@ -218,11 +374,11 @@ mini.ShowHeading(251);
 var spot = canvas.Screen(0.3, 0.6);
 Check(Math.Abs(canvas.Region(spot).X - 0.3) < 1e-9 && Math.Abs(canvas.Region(spot).Y - 0.6) < 1e-9, "a click on the turned map lands on the place under it");
 Save(mini, "minimap-turned.png");
-tracker.SetMiniMapShape(false);
+mini.ApplyShape(false);
 mini.Width = 380;
 mini.Height = 290;
 Save(mini, "minimap-turned-rectangle.png");
-tracker.SetMiniMapShape(true);
+mini.ApplyShape(true);
 mini.Width = 300;
 mini.Height = 330;
 for (int i = 0; i < 5; i++)
@@ -232,15 +388,15 @@ for (int i = 0; i < 5; i++)
 // Grab a place away from the numbered spots (a click on one makes it the target instead).
 var grab = new[] { new Vector(-40, -30), new Vector(40, -30), new Vector(-40, 30), new Vector(40, 30), new Vector(0, -60), new Vector(-60, 0) }
     .Select(v => middle + v)
-    .MaxBy(p => maps.Hotspots.Select(h => canvas.Screen(h.X, h.Y)).Select(h => Math.Sqrt((h.X - p.X) * (h.X - p.X) + (h.Y - p.Y) * (h.Y - p.Y))).DefaultIfEmpty(999).Min());
+    .MaxBy(p => petMap.Hotspots.Select(h => canvas.Screen(h.X, h.Y)).Select(h => Math.Sqrt((h.X - p.X) * (h.X - p.X) + (h.Y - p.Y) * (h.Y - p.Y))).DefaultIfEmpty(999).Min());
 var under = canvas.Region(grab);
 var drop = grab + new Vector(25, 35);
-var target = maps.TargetSpot;
+var target = petMap.TargetSpot;
 mini.MouseDown(canvas.TranslatePoint(grab, mini)!.Value, Avalonia.Input.MouseButton.Left);
 mini.MouseMove(canvas.TranslatePoint(drop, mini)!.Value);
 mini.MouseUp(canvas.TranslatePoint(drop, mini)!.Value, Avalonia.Input.MouseButton.Left);
 var moved = canvas.Region(drop);
-Check(maps.TargetSpot == target && !canvas.Follow && Math.Abs(moved.X - under.X) < 1e-6 && Math.Abs(moved.Y - under.Y) < 1e-6, "dragging the turned map keeps the grabbed place under the pointer");
+Check(petMap.TargetSpot == target && !canvas.Follow && Math.Abs(moved.X - under.X) < 1e-6 && Math.Abs(moved.Y - under.Y) < 1e-6, "dragging the turned map keeps the grabbed place under the pointer");
 var anchor = middle + new Vector(30, -20);
 var before = canvas.Region(anchor);
 canvas.ZoomAt(anchor, 1.25);

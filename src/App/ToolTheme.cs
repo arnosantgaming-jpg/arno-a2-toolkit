@@ -6,10 +6,21 @@ using Avalonia.Media;
 
 namespace ArnoA2.App;
 
+/// <summary>The colours of a tool's maps. Spot marks the ranked farming spots.</summary>
+public sealed record ToolColors(Color Accent, Color Bright, Color Window, Color Panel, Color Line, Color Muted, Color Spot);
+
 /// <summary>Each tool's colour, the one its launcher card wears, and the frame its windows share.</summary>
 public static class ToolTheme
 {
-    public static readonly Color Pets = Color.Parse("#2E8CFF"), Meter = Color.Parse("#FF4048"), Toolkit = Color.Parse("#6CC0FF");
+    public static readonly Color Pets = Color.Parse("#2E8CFF"), Meter = Color.Parse("#FF4048"), Resources = Color.Parse("#22C878"), Cubes = Color.Parse("#9A4DFF"), Toolkit = Color.Parse("#6CC0FF");
+    public static readonly ToolColors PetColors = new(Pets, Color.Parse("#6CC0FF"), Color.Parse("#060E1C"), Color.Parse("#0A1424"), Color.Parse("#1F3A5C"), Color.Parse("#8FA6C2"), Color.Parse("#FFD54F"));
+    public static readonly ToolColors CubeColors = new(Cubes, Color.Parse("#C79BFF"), Color.Parse("#0E0818"), Color.Parse("#160D26"), Color.Parse("#3A2560"), Color.Parse("#A99BC4"), Color.Parse("#C79BFF"));
+    public static readonly ToolColors ResourceColors = new(Resources, Color.Parse("#6FE8AE"), Color.Parse("#06140F"), Color.Parse("#0A1E17"), Color.Parse("#1B4A36"), Color.Parse("#8FB5A4"), Color.Parse("#6FE8AE"));
+
+    static readonly Lazy<WindowIcon?> Logo = new(() => File.Exists(Path.Combine(AppContext.BaseDirectory, "icon.png")) ? new WindowIcon(Path.Combine(AppContext.BaseDirectory, "icon.png")) : null);
+
+    /// <summary>The logo, for every window's taskbar entry.</summary>
+    public static WindowIcon? AppIcon => Logo.Value;
 
     /// <summary>Makes the standard controls under <paramref name="element"/> use the tool's colour.</summary>
     public static void Tint(StyledElement element, Color accent)

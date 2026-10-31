@@ -17,6 +17,9 @@ Map tiles, spawn data and calibration (assets/maps, data/FarmingSpawns.json)
   The position message layouts and the map calibration constants used by this
   program were also studied from that project (2026-10-24).
 
+Gathering node positions (data/ResourceNodes.json) and Hidden Cube spots (data/CubeSpots.json)
+  AION 2 game data, the property of NCSOFT. No licence to it is granted here.
+
 Pet portraits (assets/portraits) and family crystal icons (assets/crystals)
   AION 2 game artwork, copyright NCSOFT / NC Corporation, included to identify
   pets and families, as in Pet Tracker. Crystal icon source:

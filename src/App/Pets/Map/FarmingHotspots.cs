@@ -1,12 +1,13 @@
 namespace ArnoA2.App.Map;
 
-public sealed record Hotspot(double X, double Y, int Spawns, double Value, IReadOnlyList<int> PetIds, double? DistanceMetres, double Score);
+public sealed record Hotspot(double X, double Y, int Spawns, double Value, IReadOnlyList<int> Ids, double? DistanceMetres, double Score);
+public readonly record struct MapMarker(double X, double Y, int Id);
 
 /// <summary>
-/// Groups static spawn points of the wanted pets into farming spots. A spot's value is the
-/// sum of its spawns' weights within <see cref="RadiusMetres"/>; nearer spots rank higher
-/// when the player's position is known. Spawn dots are approximate and say nothing about
-/// which mobs are alive, so this ranks places, not live targets.
+/// Groups static markers of what's wanted (pet spawns, gathering nodes) into farming spots.
+/// A spot's value is the sum of its markers' weights within <see cref="RadiusMetres"/>; nearer
+/// spots rank higher when the player's position is known. Markers say nothing about what is
+/// alive right now, so this ranks places, not live targets.
 /// </summary>
 public static class FarmingHotspots
 {
@@ -26,9 +27,12 @@ public static class FarmingHotspots
         return 1.5;
     }
 
-    public static IReadOnlyList<Hotspot> Find(SpawnRegion region, WorldMap map, IReadOnlyDictionary<int, double> weights, (double X, double Y)? player, int limit = 8)
+    public static IReadOnlyList<Hotspot> Find(SpawnRegion region, WorldMap map, IReadOnlyDictionary<int, double> weights, (double X, double Y)? player, int limit = 8) =>
+        Find(region.Points.Select(p => new MapMarker(p.X, p.Y, p.PetId)), map, weights, player, limit);
+
+    public static IReadOnlyList<Hotspot> Find(IEnumerable<MapMarker> markers, WorldMap map, IReadOnlyDictionary<int, double> weights, (double X, double Y)? player, int limit = 8)
     {
-        var points = region.Points.Where(p => weights.GetValueOrDefault(p.PetId) > 0).ToArray();
+        var points = markers.Where(p => weights.GetValueOrDefault(p.Id) > 0).ToArray();
         if (points.Length == 0)
             return Array.Empty<Hotspot>();
         double radius = RadiusMetres / map.Metres, radius2 = radius * radius;
@@ -58,11 +62,11 @@ public static class FarmingHotspots
         for (int i = 0; i < points.Length; i++)
         {
             var members = Near(points[i].X, points[i].Y).ToArray();
-            double value = members.Sum(m => weights[points[m].PetId]);
-            double sx = members.Sum(m => points[m].X * weights[points[m].PetId]) / value, sy = members.Sum(m => points[m].Y * weights[points[m].PetId]) / value;
+            double value = members.Sum(m => weights[points[m].Id]);
+            double sx = members.Sum(m => points[m].X * weights[points[m].Id]) / value, sy = members.Sum(m => points[m].Y * weights[points[m].Id]) / value;
             double? distance = player is { } p ? Math.Sqrt(Math.Pow(sx - p.X, 2) + Math.Pow(sy - p.Y, 2)) * map.Metres : null;
             double score = value / (1 + (distance ?? 0) / TravelMetres);
-            candidates.Add(new(sx, sy, members.Length, value, members.Select(m => points[m].PetId).Distinct().ToArray(), distance, score));
+            candidates.Add(new(sx, sy, members.Length, value, members.Select(m => points[m].Id).Distinct().ToArray(), distance, score));
         }
 
         // Greedy suppression: keep the best spot, drop overlapping ones, repeat.

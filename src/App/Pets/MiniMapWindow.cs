@@ -10,21 +10,24 @@ using ArnoA2.App.Map;
 namespace ArnoA2.App;
 
 /// <summary>
-/// Borderless overlay map, round or rectangular: the player in the middle as an arrow
-/// pointing the camera (north up, or turned so the camera points up), a frame with compass
-/// marks, and the next farming spot as a line or an arrow on the frame.
+/// Borderless overlay map shared by every running tool, round or rectangular: the player in
+/// the middle as an arrow pointing the camera (north up, or turned so the camera points up), a
+/// frame with compass marks and one thin ring per tool in its colour, and each tool's next
+/// farming spot as a line or an arrow on the frame. The hover controls wear the first tool's colour.
 /// Drag Move or the rim to move it, drag inside to pan; controls appear on hover.
 /// </summary>
 public sealed class MiniMapWindow : Window
 {
     public const double Frame = 4, Footer = 30, FullSize = 300;
+    const double RingGap = 2.5;
+    IReadOnlyList<MapLayer> layers;
     readonly MapHub hub;
     readonly MapCanvas canvas;
     readonly Grid face = new();
-    readonly FrameControl frame = new();
+    readonly FrameControl frame;
     readonly StackPanel controls = new() { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, IsVisible = false };
     readonly Border opacityPanel;
-    readonly GoldSlider opacity = new() { Minimum = 0.2, Maximum = 1, Width = 100, VerticalAlignment = VerticalAlignment.Center };
+    readonly GoldSlider opacity;
     // Scrolls sideways when the guidance is longer than the label.
     readonly MarqueeText guidance = new() { FontSize = 11.5, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly Border grip, mover;
@@ -35,11 +38,15 @@ public sealed class MiniMapWindow : Window
     readonly Border label;
     bool sizing;
 
-    public MiniMapWindow(MapHub hub)
+    public MiniMapWindow(MapHub hub, IReadOnlyList<MapLayer> layers)
     {
         this.hub = hub;
+        this.layers = layers;
         var preferences = hub.Preferences;
+        frame = new FrameControl();
+        opacity = new GoldSlider(layers[0].Colors) { Minimum = 0.2, Maximum = 1, Width = 100, VerticalAlignment = VerticalAlignment.Center };
         Title = KdeWindowRules.MiniMapTitle;
+        Icon = ToolTheme.AppIcon;
         Width = Math.Clamp(preferences.MiniWidth, FullSize / 2, 1200);
         Height = Math.Clamp(preferences.MiniHeight, FullSize / 2 + Footer, 1200);
         MinWidth = FullSize / 2;
@@ -55,7 +62,7 @@ public sealed class MiniMapWindow : Window
             Position = new PixelPoint(x, y);
         }
 
-        canvas = new MapCanvas(hub, minimap: true) { Zoom = preferences.MiniZoom, Margin = new Thickness(Frame) };
+        canvas = new MapCanvas(hub, layers, minimap: true) { Zoom = preferences.MiniZoom };
         opacity.Value = preferences.MiniOpacity;
         opacity.ValueChanged += value =>
         {
@@ -78,8 +85,8 @@ public sealed class MiniMapWindow : Window
             }),
             Small("⟳", "Next farming spot", () =>
             {
-                if (hub.Hotspots.Count > 0)
-                    hub.TargetSpot = (hub.TargetSpot + 1) % hub.Hotspots.Count;
+                foreach (var layer in this.layers.Where(l => l.Hotspots.Count > 0))
+                    layer.TargetSpot = (layer.TargetSpot + 1) % layer.Hotspots.Count;
                 Update();
             }),
             turnButton,
@@ -92,7 +99,7 @@ public sealed class MiniMapWindow : Window
         var opacityRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         opacityRow.Children.Add(new TextBlock { Text = "Opacity", FontSize = 10.5, Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center });
         opacityRow.Children.Add(opacity);
-        opacityPanel = new Border { Background = Brush.Parse("#CC060E1C"), Padding = new Thickness(12, 0), Height = 28, CornerRadius = new CornerRadius(14), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Frame + 10, 0, 0), Child = opacityRow, IsVisible = false };
+        opacityPanel = new Border { Padding = new Thickness(12, 0), Height = 28, CornerRadius = new CornerRadius(14), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, Frame + 10, 0, 0), Child = opacityRow, IsVisible = false };
 
         grip = new Border
         {
@@ -103,7 +110,7 @@ public sealed class MiniMapWindow : Window
             Background = Brushes.Transparent,
             Cursor = new Cursor(StandardCursorType.BottomRightCorner),
             IsVisible = false,
-            Child = new TextBlock { Text = "◢", FontSize = 13, Foreground = Ui.Accent, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom }
+            Child = new TextBlock { Text = "◢", FontSize = 13, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom }
         };
         grip.PointerPressed += (_, e) =>
         {
@@ -113,8 +120,6 @@ public sealed class MiniMapWindow : Window
 
         mover = new Border
         {
-            Background = Brush.Parse("#CC060E1C"),
-            BorderBrush = Ui.Accent,
             BorderThickness = new Thickness(1),
             Padding = new Thickness(12, 0),
             Height = 26,
@@ -146,13 +151,14 @@ public sealed class MiniMapWindow : Window
                 BeginMoveDrag(e);
         };
 
-        label = new Border { Background = Brush.Parse("#D9060E1C"), BorderBrush = Brush.Parse("#802E8CFF"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 2), Height = 24, HorizontalAlignment = HorizontalAlignment.Center, Child = guidance, Margin = new Thickness(8, 4, 8, 0) };
+        label = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 2), Height = 24, HorizontalAlignment = HorizontalAlignment.Center, Child = guidance, Margin = new Thickness(8, 4, 8, 0) };
         var layout = new DockPanel();
         DockPanel.SetDock(label, Dock.Bottom);
         layout.Children.Add(label);
         layout.Children.Add(face);
         Content = layout;
 
+        SetLayers(layers);
         Fade(preferences.MiniOpacity);
         PointerEntered += (_, _) => ShowControls(true);
         PointerExited += (_, _) => ShowControls(false);
@@ -184,6 +190,31 @@ public sealed class MiniMapWindow : Window
     }
 
     bool Round => frame.Round;
+
+    /// <summary>The frame grows by one ring per tool past the first.</summary>
+    double Edge => Frame + (layers.Count - 1) * RingGap;
+
+    /// <summary>The tools now running: a ring and marks for each, outermost first.</summary>
+    public void SetLayers(IReadOnlyList<MapLayer> running)
+    {
+        layers = running;
+        var colors = running[0].Colors;
+        IBrush accent = new SolidColorBrush(colors.Accent), glass = new SolidColorBrush(colors.Window, 0.8), solid = new SolidColorBrush(colors.Window, 0.9);
+        canvas.Show(running);
+        canvas.Margin = new Thickness(Edge);
+        frame.Tint(running.Select(l => l.Colors).ToArray(), Edge, RingGap);
+        opacity.Tint(colors);
+        opacityPanel.Background = glass;
+        (mover.Background, mover.BorderBrush) = (glass, accent);
+        ((TextBlock)grip.Child!).Foreground = accent;
+        (label.Background, label.BorderBrush) = (new SolidColorBrush(colors.Window, 0.85), new SolidColorBrush(colors.Accent, 0.5));
+        foreach (var button in controls.Children.OfType<Button>())
+            (button.Background, button.BorderBrush) = (solid, accent);
+        Layout(new Size(Width, Height));
+        frame.InvalidateVisual();
+        canvas.InvalidateVisual();
+        Update();
+    }
 
     void ToggleShape()
     {
@@ -296,7 +327,7 @@ public sealed class MiniMapWindow : Window
             w = h = Math.Min(w, h);
         face.Width = Math.Max(w, 0);
         face.Height = h;
-        double iw = Math.Max(w - 2 * Frame, 0), ih = Math.Max(h - 2 * Frame, 0);
+        double iw = Math.Max(w - 2 * Edge, 0), ih = Math.Max(h - 2 * Edge, 0);
         canvas.Clip = Round ? new EllipseGeometry(new Rect(0, 0, iw, ih)) : new RectangleGeometry(new Rect(0, 0, iw, ih), 8, 8);
     }
 
@@ -317,9 +348,9 @@ public sealed class MiniMapWindow : Window
         mover.IsVisible = show;
     }
 
-    void Update() => guidance.Text = hub.Error ?? hub.Guidance();
+    void Update() => guidance.Text = hub.Error ?? string.Join("   |   ", layers.Select(l => l.Guidance()).Distinct());
 
-    static Button Small(string label, string tip, Action action)
+    Button Small(string label, string tip, Action action)
     {
         var button = new Button
         {
@@ -328,8 +359,6 @@ public sealed class MiniMapWindow : Window
             Height = 28,
             Padding = new Thickness(0),
             CornerRadius = new CornerRadius(14),
-            Background = Brush.Parse("#E6060E1C"),
-            BorderBrush = Ui.Accent,
             BorderThickness = new Thickness(1),
             Foreground = Brushes.White,
             FontSize = 14,
@@ -344,11 +373,20 @@ public sealed class MiniMapWindow : Window
     /// <summary>A thin frame, a ring or a rounded rectangle, with N/E/S/W floating just inside the map.</summary>
     sealed class FrameControl : Control, Avalonia.Rendering.ICustomHitTest
     {
-        static readonly IBrush Dark = Brush.Parse("#F0060E1C");
-        static readonly IPen Gold = new Pen(Brush.Parse("#2E8CFF"), 1.5);
+        IBrush Dark = Brushes.Black, North = Brushes.White;
+        IPen[] Rings = Array.Empty<IPen>();
+        double Thick = Frame, Gap;
         static readonly IPen Shadow = new Pen(Brush.Parse("#80000000"), 3);
         const double Grab = 9, Inset = 11;
         static readonly Typeface Face = new("Noto Sans", FontStyle.Normal, FontWeight.Bold);
+        public void Tint(IReadOnlyList<ToolColors> tools, double thick, double gap)
+        {
+            Dark = new SolidColorBrush(tools[0].Window, 0.94);
+            North = new SolidColorBrush(tools[0].Bright);
+            Rings = tools.Select(t => (IPen)new Pen(new SolidColorBrush(t.Accent), 1.5)).ToArray();
+            (Thick, Gap) = (thick, gap);
+        }
+
         public bool Round { get; set; } = true;
         /// <summary>Degrees the map is turned anticlockwise: the marks move with north.</summary>
         public double Turned { get; set; }
@@ -360,16 +398,16 @@ public sealed class MiniMapWindow : Window
             {
                 var c = new Point(Bounds.Width / 2, Bounds.Height / 2);
                 double r = Math.Min(Bounds.Width, Bounds.Height) / 2, d = Math.Sqrt((p.X - c.X) * (p.X - c.X) + (p.Y - c.Y) * (p.Y - c.Y));
-                return d >= r - Grab && d <= r;
+                return d >= r - (Grab + Thick - Frame) && d <= r;
             }
 
             var outer = new Rect(Bounds.Size);
-            return outer.Contains(p) && !outer.Deflate(Grab).Contains(p);
+            return outer.Contains(p) && !outer.Deflate(Grab + Thick - Frame).Contains(p);
         }
 
         public override void Render(DrawingContext context)
         {
-            if (Bounds.Width <= 2 * Frame || Bounds.Height <= 2 * Frame)
+            if (Bounds.Width <= 2 * Thick || Bounds.Height <= 2 * Thick)
                 return;
             if (Round)
                 RenderRing(context);
@@ -386,14 +424,15 @@ public sealed class MiniMapWindow : Window
             {
                 g.SetFillRule(FillRule.EvenOdd);
                 Circle(g, c, r - 1);
-                Circle(g, c, r - Frame);
+                Circle(g, c, r - Thick);
             }
 
             context.DrawGeometry(Dark, null, band);
-            context.DrawEllipse(null, Shadow, c, r - Frame + 1, r - Frame + 1);
-            context.DrawEllipse(null, Gold, c, r - 1.5, r - 1.5);
+            context.DrawEllipse(null, Shadow, c, r - Thick + 1, r - Thick + 1);
+            for (int i = 0; i < Rings.Length; i++)
+                context.DrawEllipse(null, Rings[i], c, r - 1.5 - i * Gap, r - 1.5 - i * Gap);
 
-            double mid = r - Frame - Inset;
+            double mid = r - Thick - Inset;
             foreach (var (text, deg) in Compass)
             {
                 double a = (deg - Turned) * Math.PI / 180;
@@ -404,7 +443,7 @@ public sealed class MiniMapWindow : Window
         void RenderRectangle(DrawingContext context)
         {
             var outer = new Rect(Bounds.Size).Deflate(1);
-            var inner = new Rect(Bounds.Size).Deflate(Frame);
+            var inner = new Rect(Bounds.Size).Deflate(Thick);
             var band = new StreamGeometry();
             using (var g = band.Open())
             {
@@ -415,9 +454,10 @@ public sealed class MiniMapWindow : Window
 
             context.DrawGeometry(Dark, null, band);
             context.DrawRectangle(null, Shadow, inner.Inflate(1), 8, 8);
-            context.DrawRectangle(null, Gold, outer.Deflate(0.5), 12, 12);
+            for (int i = 0; i < Rings.Length; i++)
+                context.DrawRectangle(null, Rings[i], outer.Deflate(0.5 + i * Gap), 12 - i, 12 - i);
             // Each letter where its direction from the middle meets a line just inside the frame.
-            double inset = Frame + Inset, rx = Bounds.Width / 2 - inset, ry = Bounds.Height / 2 - inset;
+            double inset = Thick + Inset, rx = Bounds.Width / 2 - inset, ry = Bounds.Height / 2 - inset;
             foreach (var (text, deg) in Compass)
             {
                 double a = (deg - Turned) * Math.PI / 180, dx = Math.Sin(a), dy = -Math.Cos(a);
@@ -428,10 +468,10 @@ public sealed class MiniMapWindow : Window
 
         static readonly (string Text, double Degrees)[] Compass = { ("N", 0), ("E", 90), ("S", 180), ("W", 270) };
 
-        static void Letter(DrawingContext context, string text, Point at)
+        void Letter(DrawingContext context, string text, Point at)
         {
             var edge = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 11, Brushes.Black);
-            var format = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 11, text == "N" ? Brush.Parse("#6CC0FF") : Brushes.White);
+            var format = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 11, text == "N" ? North : Brushes.White);
             var corner = new Point(at.X - format.Width / 2, at.Y - format.Height / 2);
             // A dark edge keeps the letter readable over any terrain.
             foreach (var (x, y) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1) })

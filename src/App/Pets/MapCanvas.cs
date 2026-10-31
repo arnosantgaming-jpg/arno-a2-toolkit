@@ -10,23 +10,27 @@ using ArnoA2.App.Map;
 
 namespace ArnoA2.App;
 
-/// <summary>Region map with spawn dots, ranked farming spots, live pet mobs and the player.
+/// <summary>Region map with a tool's dots, its ranked spots, live pet mobs and the player.
 /// Coordinates are normalized region units (0..1); Zoom is screen pixels per tile.</summary>
 public sealed class MapCanvas : Control
 {
     static readonly Dictionary<string, Bitmap?> Tiles = new();
     static readonly IPen Outline = new Pen(Brushes.White, 1.5);
-    static readonly IPen SpotPen = new Pen(Brush.Parse("#FFD54F"), 2);
-    static readonly IPen TargetPen = new Pen(Brush.Parse("#FFD54F"), 3);
-    static readonly IPen RoutePen = new Pen(Brush.Parse("#CCFFD54F"), 2.5) { DashStyle = new DashStyle(new double[] { 3, 2 }, 0) };
     static readonly IBrush Player = Brush.Parse("#4FC3F7");
+    sealed record Paint(MapLayer Layer, IBrush Spot, IBrush Fill, IBrush TargetFill, IPen SpotPen, IPen TargetPen, IPen RoutePen);
     readonly MapHub hub;
+    IReadOnlyList<Paint> paints = Array.Empty<Paint>();
     readonly DispatcherTimer animation = new() { Interval = TimeSpan.FromMilliseconds(33) };
     (double X, double Y)? shown;
     Point? drag;
-    public MapCanvas(MapHub hub, bool minimap)
+    public MapCanvas(MapLayer layer, bool minimap) : this(layer.Hub, new[] { layer }, minimap)
+    {
+    }
+
+    public MapCanvas(MapHub hub, IReadOnlyList<MapLayer> layers, bool minimap)
     {
         this.hub = hub;
+        Show(layers);
         Minimap = minimap;
         ClipToBounds = true;
         Focusable = true;
@@ -37,6 +41,15 @@ public sealed class MapCanvas : Control
     }
 
     public bool Minimap { get; }
+
+    /// <summary>Draws these tools' marks, each in its own colour.</summary>
+    public void Show(IReadOnlyList<MapLayer> layers) => paints = layers.Select(layer =>
+    {
+        var spot = layer.Colors.Spot;
+        var brush = new SolidColorBrush(spot);
+        return new Paint(layer, brush, new SolidColorBrush(spot, 0.09), new SolidColorBrush(spot, 0.2), new Pen(brush, 2), new Pen(brush, 3), new Pen(new SolidColorBrush(spot, 0.8), 2.5) { DashStyle = new DashStyle(new double[] { 3, 2 }, 0) });
+    }).ToArray();
+
     /// <summary>Drawn inside a circle: off-screen markers sit on the circle's edge.</summary>
     public bool Round { get; set; }
     public bool Follow { get; set; } = true;
@@ -136,54 +149,58 @@ public sealed class MapCanvas : Control
                     context.DrawImage(image, new Rect(image.Size), rect);
             }
 
-        double dot = Math.Clamp(Zoom * 1.2, 2.5, 5);
-        if (hub.Preferences.ShowAllSpawns || Minimap)
-            foreach (var point in region.Points)
-            {
-                if (!hub.Weights.ContainsKey(point.PetId))
-                    continue;
-                var at = Screen(point.X, point.Y);
-                if (bounds.Inflate(dot).Contains(at))
-                    context.DrawEllipse(FamilyBrush(point.PetId), null, at, dot, dot);
-            }
+        double dot = Math.Clamp(Zoom * 2, 4, 7.5);
+        var dotEdge = MapMarkers.Edge(dot);
+        var learnedEdge = new Pen(Brushes.White, 1.2 / dot);
+        foreach (var paint in paints)
+            if (paint.Layer.Look.ShowAllSpawns || Minimap)
+                foreach (var point in paint.Layer.Dots)
+                {
+                    var at = Screen(point.X, point.Y);
+                    if (bounds.Inflate(dot).Contains(at))
+                        MapMarkers.Draw(context, point.Shape, at, dot, point.Brush, point.Learned ? learnedEdge : dotEdge);
+                }
 
         double radius = FarmingHotspots.RadiusMetres / map.Metres * Pixels;
-        for (int i = hub.Hotspots.Count - 1; i >= 0; i--)
-        {
-            var spot = hub.Hotspots[i];
-            var at = Screen(spot.X, spot.Y);
-            bool target = i == hub.TargetSpot;
-            context.DrawEllipse(target ? Brush.Parse("#33FFD54F") : Brush.Parse("#18FFD54F"), target ? TargetPen : SpotPen, at, Math.Max(radius, 9), Math.Max(radius, 9));
-            Label(context, (i + 1).ToString(CultureInfo.InvariantCulture), at, 13, Brushes.Black, Brush.Parse("#FFD54F"));
-        }
+        foreach (var paint in paints)
+            for (int i = paint.Layer.Hotspots.Count - 1; i >= 0; i--)
+            {
+                var spot = paint.Layer.Hotspots[i];
+                var at = Screen(spot.X, spot.Y);
+                bool target = i == paint.Layer.TargetSpot;
+                context.DrawEllipse(target ? paint.TargetFill : paint.Fill, target ? paint.TargetPen : paint.SpotPen, at, Math.Max(radius, 9), Math.Max(radius, 9));
+                Label(context, (i + 1).ToString(CultureInfo.InvariantCulture), at, 13, Brushes.Black, paint.Spot);
+            }
 
-        if (hub.Live is { } live && live.Region == hub.Region)
+        var hunter = paints.FirstOrDefault(p => p.Layer.ShowsMobs)?.Layer;
+        if (hunter != null && hub.Live is { } live && live.Region == hub.Region)
             foreach (var mob in live.Mobs)
             {
                 var (x, y) = map.Normalize(mob.X, mob.Y);
                 var at = Screen(x, y);
                 if (!bounds.Contains(at))
                     continue;
-                bool wanted = hub.Weights.ContainsKey(mob.PetId);
+                bool wanted = hunter.WantsMob(mob.PetId);
                 context.DrawEllipse(wanted ? FamilyBrush(mob.PetId) : Brush.Parse("#90A4AE"), new Pen(wanted ? Brushes.White : Brushes.Black, wanted ? 2 : 1), at, wanted ? 6 : 4, wanted ? 6 : 4);
             }
 
         if (shown is { } player)
         {
             var at = Screen(player.X, player.Y);
-            if (hub.Target is { } goal && (goal.DistanceMetres ?? 0) >= FarmingHotspots.RadiusMetres)
-            {
-                var end = Screen(goal.X, goal.Y);
-                context.DrawLine(RoutePen, at, end);
-                if (Round)
+            foreach (var paint in paints)
+                if (paint.Layer.Target is { } goal && (goal.DistanceMetres ?? 0) >= FarmingHotspots.RadiusMetres)
                 {
-                    double edge = Math.Min(bounds.Width, bounds.Height) / 2 - 16;
-                    if (Distance(end, middle) > edge)
-                        RoundEdgeArrow(context, at, end, middle, edge);
+                    var end = Screen(goal.X, goal.Y);
+                    context.DrawLine(paint.RoutePen, at, end);
+                    if (Round)
+                    {
+                        double edge = Math.Min(bounds.Width, bounds.Height) / 2 - 16;
+                        if (Distance(end, middle) > edge)
+                            RoundEdgeArrow(context, at, end, middle, edge, paint.Spot);
+                    }
+                    else if (!bounds.Deflate(14).Contains(end))
+                        EdgeArrow(context, at, end, bounds, paint.Spot);
                 }
-                else if (!bounds.Deflate(14).Contains(end))
-                    EdgeArrow(context, at, end, bounds);
-            }
 
             bool exact = hub.Precise;
             if (!exact)
@@ -229,7 +246,7 @@ public sealed class MapCanvas : Control
     static double Distance(Point a, Point b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
 
     /// <summary>Arrow where the line from the player toward the target leaves the circle.</summary>
-    static void RoundEdgeArrow(DrawingContext context, Point from, Point to, Point middle, double radius)
+    static void RoundEdgeArrow(DrawingContext context, Point from, Point to, Point middle, double radius, IBrush brush)
     {
         double dx = to.X - from.X, dy = to.Y - from.Y, length = Math.Sqrt(dx * dx + dy * dy);
         if (length < 1)
@@ -240,10 +257,10 @@ public sealed class MapCanvas : Control
         double fx = from.X - middle.X, fy = from.Y - middle.Y, b = fx * dx + fy * dy, c = fx * fx + fy * fy - radius * radius;
         double t = -b + Math.Sqrt(Math.Max(0, b * b - c));
         var tip = new Point(from.X + dx * t, from.Y + dy * t);
-        Arrow(context, tip, Math.Atan2(dy, dx));
+        Arrow(context, tip, Math.Atan2(dy, dx), brush);
     }
 
-    static void Arrow(DrawingContext context, Point tip, double angle)
+    static void Arrow(DrawingContext context, Point tip, double angle, IBrush brush)
     {
         var shape = new StreamGeometry();
         using (var g = shape.Open())
@@ -255,16 +272,16 @@ public sealed class MapCanvas : Control
         }
 
         using (context.PushTransform(Matrix.CreateRotation(angle) * Matrix.CreateTranslation(tip.X, tip.Y)))
-            context.DrawGeometry(Brush.Parse("#FFD54F"), new Pen(Brushes.Black, 1.5), shape);
+            context.DrawGeometry(brush, new Pen(Brushes.Black, 1.5), shape);
     }
 
-    static void EdgeArrow(DrawingContext context, Point from, Point to, Rect bounds)
+    static void EdgeArrow(DrawingContext context, Point from, Point to, Rect bounds, IBrush brush)
     {
         double angle = Math.Atan2(to.Y - from.Y, to.X - from.X);
         var inner = bounds.Deflate(16);
         double tx = Math.Cos(angle), ty = Math.Sin(angle);
         double scale = Math.Min(Math.Abs((tx > 0 ? inner.Right - from.X : inner.Left - from.X) / (tx == 0 ? 1e-9 : tx)), Math.Abs((ty > 0 ? inner.Bottom - from.Y : inner.Top - from.Y) / (ty == 0 ? 1e-9 : ty)));
-        Arrow(context, new Point(from.X + tx * scale, from.Y + ty * scale), angle);
+        Arrow(context, new Point(from.X + tx * scale, from.Y + ty * scale), angle, brush);
     }
 
     static void Label(DrawingContext context, string text, Point center, double size, IBrush foreground, IBrush background)
@@ -288,16 +305,17 @@ public sealed class MapCanvas : Control
         var point = e.GetPosition(this);
         // Clicking a numbered spot makes it the guidance target.
         double radius = Math.Max(FarmingHotspots.RadiusMetres / hub.Map.Metres * Pixels, 12);
-        for (int i = 0; i < hub.Hotspots.Count; i++)
-        {
-            var at = Screen(hub.Hotspots[i].X, hub.Hotspots[i].Y);
-            if (Math.Pow(at.X - point.X, 2) + Math.Pow(at.Y - point.Y, 2) <= radius * radius)
+        foreach (var paint in paints)
+            for (int i = 0; i < paint.Layer.Hotspots.Count; i++)
             {
-                hub.TargetSpot = i;
-                ViewChanged?.Invoke();
-                return;
+                var at = Screen(paint.Layer.Hotspots[i].X, paint.Layer.Hotspots[i].Y);
+                if (Math.Pow(at.X - point.X, 2) + Math.Pow(at.Y - point.Y, 2) <= radius * radius)
+                {
+                    paint.Layer.TargetSpot = i;
+                    ViewChanged?.Invoke();
+                    return;
+                }
             }
-        }
 
         drag = point;
         e.Pointer.Capture(this);

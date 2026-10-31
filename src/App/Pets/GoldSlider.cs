@@ -13,15 +13,23 @@ namespace ArnoA2.App;
 public sealed class GoldSlider : Control
 {
     const double Knob = 7, TrackHeight = 4;
-    static readonly IBrush Track = Brush.Parse("#1F3A5C");
-    static readonly IBrush Fill = Brush.Parse("#2E8CFF");
-    static readonly IBrush KnobBrush = Brush.Parse("#6CC0FF");
-    static readonly IPen KnobEdge = new Pen(Brush.Parse("#060E1C"), 1.5);
+    IBrush Track = null!, Fill = null!, KnobBrush = null!;
+    IPen KnobEdge = null!;
     double value;
     bool dragging;
 
-    public GoldSlider()
+    public void Tint(ToolColors colors)
     {
+        Track = new SolidColorBrush(colors.Line);
+        Fill = new SolidColorBrush(colors.Accent);
+        KnobBrush = new SolidColorBrush(colors.Bright);
+        KnobEdge = new Pen(new SolidColorBrush(colors.Window), 1.5);
+        InvalidateVisual();
+    }
+
+    public GoldSlider(ToolColors colors)
+    {
+        Tint(colors);
         Height = 2 * Knob + 4;
         Cursor = new Cursor(StandardCursorType.Hand);
     }

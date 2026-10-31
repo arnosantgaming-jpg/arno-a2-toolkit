@@ -20,6 +20,8 @@ public sealed class HubSettings
 {
     public bool Pets { get; set; } = true;
     public bool Meter { get; set; } = true;
+    public bool Resources { get; set; }
+    public bool Cubes { get; set; }
     public bool Restore { get; set; } = true;
 
     static string File(string folder) => Path.Combine(folder, "hub.json");
@@ -76,7 +78,7 @@ public sealed class HubWindow : Window
     const double CanvasWidth = 1536, CanvasHeight = 1024;
     const string SteamGame = "steam://rungameid/3393110";
     const double NavWidth = 265, DrawerWidth = 1027, DrawerScale = 1.3, MapScale = 1.15;
-    public const string PetsDrawer = "pets", FinderDrawer = "finder", SessionDrawer = "session", MapDrawer = "map", MeterDrawer = "meter", LogDrawer = "log", ToolkitDrawer = "toolkit", AboutDrawer = "about";
+    public const string PetsDrawer = "pets", FinderDrawer = "finder", SessionDrawer = "session", MapDrawer = "map", MeterDrawer = "meter", LogDrawer = "log", ResourceDrawer = "resources", ResourceMapDrawer = "resource-map", CubeDrawer = "cubes", CubeMapDrawer = "cube-map", ToolkitDrawer = "toolkit", AboutDrawer = "about";
 
     static readonly IBrush Ink = Brush.Parse("#05070D");
     static readonly IBrush Bright = Brush.Parse("#E6EDF8");
@@ -88,7 +90,9 @@ public sealed class HubWindow : Window
     static readonly IBrush Off = Brush.Parse("#5E6B7E");
 
     readonly AppState app;
-    readonly MapHub maps;
+    readonly PetLayer maps;
+    readonly ResourceLayer nodes;
+    readonly CubeLayer spots;
     readonly string folder;
     readonly HubSettings saved;
     readonly Stopwatch session = new();
@@ -96,7 +100,7 @@ public sealed class HubWindow : Window
     readonly Ellipse dot = new() { Width = 13, Height = 13 }, navDot = new() { Width = 12, Height = 12 };
     readonly TextBlock detected = Text("", 15, Green), navDetected = Text("", 14, Bright);
     readonly TextBlock link = Row(""), character = Row(""), uptime = Row(""), status = Text("", 12.5, Soft);
-    readonly Image petsToggle = new(), meterToggle = new(), loginToggle = new(), restoreToggle = new();
+    readonly Image petsToggle = new(), meterToggle = new(), resourceToggle = new(), cubeToggle = new(), loginToggle = new(), restoreToggle = new();
     readonly Border launch;
     readonly List<(Func<bool> Running, Control Ready, Control Launched)> cards = new();
     Border popOut = null!;
@@ -107,16 +111,21 @@ public sealed class HubWindow : Window
     readonly List<(string? Key, Border Item, Color Accent)> navigation = new();
     TrackerWindow? pets;
     MeterWindow? meter;
+    ResourceWindow? resources;
+    CubeWindow? cubes;
     string? opened;
     bool closing;
 
-    public HubWindow(AppState app, MapHub maps)
+    public HubWindow(AppState app, MapHub position)
     {
         this.app = app;
-        this.maps = maps;
+        maps = new PetLayer(app, position);
+        nodes = new ResourceLayer(position, app.Store.Folder);
+        spots = new CubeLayer(position, app.Store.Folder);
         folder = Path.GetDirectoryName(app.Store.Folder)!;
         saved = HubSettings.Load(folder);
         Title = "Arno's A2 Toolkit";
+        Icon = ToolTheme.AppIcon;
         Width = 1152;
         Height = 768;
         MinWidth = 960;
@@ -130,17 +139,19 @@ public sealed class HubWindow : Window
         Place(canvas, Card(478, 332, "#2E8CFF", "cpet.png", "Pet Tracker", "Track pet ranks, souls and\nwhere to farm them.", "pets.png", 240, 262,
             new[] { ("shield", "Pet Ranks"), ("chest", "Souls Needed"), ("pin", "Farming Spots"), ("map", "World Map"), ("star", "Mini-Map Overlay") },
             "blue", OpenPets, () => ShowDrawer(PetsDrawer), () => pets != null,
-            new (string, Action)[] { ("Settings", () => ShowDrawer(PetsDrawer)), ("Find a Pet", () => ShowDrawer(FinderDrawer)), ("Session", () => ShowDrawer(SessionDrawer)), ("Mini-map", () => pets?.OpenMiniMap()), ("Map", OpenMap) }), 285, 270);
+            new (string, Action)[] { ("Settings", () => ShowDrawer(PetsDrawer)), ("Find a Pet", () => ShowDrawer(FinderDrawer)), ("Session", () => ShowDrawer(SessionDrawer)), ("Mini-map", () => pets?.ToggleMiniMap()), ("Map", OpenMap) }), 285, 270);
         Place(canvas, Card(486, 332, "#FF4048", "cdps.png", "DPS Meter", "Real-time damage meter with\ndetailed statistics.", "meter.png", 240, 262,
             new[] { ("bars", "Live DPS"), ("burst", "Class & Combat Power"), ("pie", "Damage %, Total Damage"), ("swords", "Skill Breakdown"), ("boss", "Boss Fight History") },
             "red", OpenMeter, () => ShowDrawer(MeterDrawer), () => meter != null,
             new (string, Action)[] { ("Settings", () => ShowDrawer(MeterDrawer)), ("Fight Log", () => ShowDrawer(LogDrawer)) }), 784, 270);
         Place(canvas, Card(478, 336, "#22C878", "cleaf.png", "Resource Tracker", "See where gathering resources\nand materials spawn.", "resource.png", 164, 263,
             new[] { ("hammer", "Gathering Nodes"), ("essence", "Odyle"), ("pouch", "Cooking Materials") },
-            null, null, null, null, null), 285, 623);
-        Place(canvas, Card(486, 336, "#9A4DFF", "ccube.png", "Hidden Cube Tracker", "See where Hidden Cubes spawn\nacross all regions.", "cube.png", 280, 263,
-            new[] { ("pin", "Spawn Locations"), ("box", "Cube Types"), ("map", "Interactive Map") },
-            null, null, null, null, null), 784, 623);
+            "green", OpenResources, () => ShowDrawer(ResourceDrawer), () => resources != null,
+            new (string, Action)[] { ("Settings", () => ShowDrawer(ResourceDrawer)), ("Mini-map", () => resources?.ToggleMiniMap()), ("Map", OpenResourceMap) }), 285, 623);
+        Place(canvas, Card(486, 336, "#9A4DFF", "ccube.png", "Hidden Cube Tracker", "See where Hidden Cubes can\nappear in Verteron and Altgard.", "cube.png", 280, 263,
+            new[] { ("pin", "Spawn Locations"), ("box", "Checked Spots"), ("map", "Interactive Map") },
+            "purple", OpenCubes, () => ShowDrawer(CubeDrawer), () => cubes != null,
+            new (string, Action)[] { ("Settings", () => ShowDrawer(CubeDrawer)), ("Mini-map", () => cubes?.ToggleMiniMap()), ("Map", OpenCubeMap) }), 784, 623);
 
         drawer = Drawer();
         Place(canvas, drawer, NavWidth, 0);
@@ -179,6 +190,10 @@ public sealed class HubWindow : Window
                 OpenPets();
             if (saved.Restore && saved.Meter)
                 OpenMeter();
+            if (saved.Restore && saved.Resources)
+                OpenResources();
+            if (saved.Restore && saved.Cubes)
+                OpenCubes();
         };
         KeyDown += (_, e) =>
         {
@@ -192,6 +207,8 @@ public sealed class HubWindow : Window
             clock.Stop();
             pets?.Close();
             meter?.Close();
+            resources?.Close();
+            cubes?.Close();
         };
     }
 
@@ -216,6 +233,8 @@ public sealed class HubWindow : Window
         launch.Opacity = found ? 0.45 : 1;
         Show(petsToggle, pets != null);
         Show(meterToggle, meter != null);
+        Show(resourceToggle, resources != null);
+        Show(cubeToggle, cubes != null);
         Show(loginToggle, Autostart.Enabled);
         Show(restoreToggle, saved.Restore);
     }
@@ -231,8 +250,8 @@ public sealed class HubWindow : Window
         Place(canvas, new TextBlock { Text = "SETTINGS", FontSize = 13, FontWeight = FontWeight.SemiBold, LetterSpacing = 2.5, Foreground = Off }, 30, 324);
         Place(canvas, Nav("i-pet.png", "Pet Tracker", PetsDrawer, ToolTheme.Pets), 10, 350);
         Place(canvas, Nav("i-dps.png", "DPS Meter", MeterDrawer, ToolTheme.Meter), 10, 400);
-        Place(canvas, Soon(NavItem("i-leaf.png", "Resource Tracker")), 10, 450);
-        Place(canvas, Soon(NavItem("i-cube.png", "Hidden Cube Tracker")), 10, 500);
+        Place(canvas, Nav("i-leaf.png", "Resource Tracker", ResourceDrawer, ToolTheme.Resources), 10, 450);
+        Place(canvas, Nav("i-cube.png", "Hidden Cube Tracker", CubeDrawer, ToolTheme.Cubes), 10, 500);
         Place(canvas, Nav("i-gear.png", "Toolkit", ToolkitDrawer, ToolTheme.Toolkit), 10, 550);
         Place(canvas, new Border { Width = 216, Height = 1, Background = Rim }, 24, 610);
         Place(canvas, Nav("i-info.png", "About", AboutDrawer, ToolTheme.Toolkit), 10, 624);
@@ -261,7 +280,7 @@ public sealed class HubWindow : Window
     {
         foreach (var (key, item, accent) in navigation)
         {
-            bool on = key == opened || key == PetsDrawer && opened is FinderDrawer or SessionDrawer or MapDrawer || key == MeterDrawer && opened == LogDrawer;
+            bool on = key == opened || key == PetsDrawer && opened is FinderDrawer or SessionDrawer or MapDrawer || key == MeterDrawer && opened == LogDrawer || key == ResourceDrawer && opened == ResourceMapDrawer || key == CubeDrawer && opened == CubeMapDrawer;
             item.Background = on ? new SolidColorBrush(accent, 0.3) : Brushes.Transparent;
             item.BorderBrush = on ? new SolidColorBrush(accent) : Brushes.Transparent;
             item.BoxShadow = on ? BoxShadows.Parse($"0 0 12 0 #A0{accent.R:X2}{accent.G:X2}{accent.B:X2}") : default;
@@ -301,6 +320,10 @@ public sealed class HubWindow : Window
         {
             PetsDrawer => ("Pet Tracker Settings", "cpet.png", ToolTheme.Pets, (Func<Control>)(() => new PetSettingsPanel(app, maps))),
             FinderDrawer => ("Find a Pet", "cpet.png", ToolTheme.Pets, () => new FinderPanel(app, maps, OpenMap)),
+            ResourceDrawer => ("Resource Tracker Settings", "cleaf.png", ToolTheme.Resources, () => new ResourceSettingsPanel(nodes, () => resources)),
+            ResourceMapDrawer => ("Map", "cleaf.png", ToolTheme.Resources, () => new MapPanel(nodes)),
+            CubeDrawer => ("Hidden Cube Tracker Settings", "ccube.png", ToolTheme.Cubes, () => new CubeSettingsPanel(spots, () => cubes)),
+            CubeMapDrawer => ("Map", "ccube.png", ToolTheme.Cubes, () => new MapPanel(spots)),
             MapDrawer => ("Map", "cpet.png", ToolTheme.Pets, () => new MapPanel(maps)),
             SessionDrawer => ("This Session", "cpet.png", ToolTheme.Pets, () => new SessionPanel(app)),
             MeterDrawer => ("DPS Meter Settings", "cdps.png", ToolTheme.Meter, () => new MeterSettingsPanel(app, () => meter?.ApplyOpacity())),
@@ -320,8 +343,9 @@ public sealed class HubWindow : Window
             EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
             GradientStops = { new GradientStop(Color.FromRgb((byte)(accent.R / 7 + 6), (byte)(accent.G / 7 + 7), (byte)(accent.B / 7 + 12)), 0), new GradientStop(Color.Parse("#05070D"), 1) }
         };
-        bool map = key == MapDrawer;
+        bool map = key is MapDrawer or ResourceMapDrawer or CubeMapDrawer;
         popOut.IsVisible = map;
+        popOut.BorderBrush = new SolidColorBrush(accent);
         drawerBody.Margin = map ? default : new Thickness(30, 0, 30, 24);
         double scale = map ? MapScale : DrawerScale;
         drawerBody.Child = new LayoutTransformControl { LayoutTransform = new ScaleTransform(scale, scale), Child = Scrolled(page()) };
@@ -357,9 +381,46 @@ public sealed class HubWindow : Window
             ShowDrawer(MapDrawer);
     }
 
+    void OpenResourceMap()
+    {
+        if (resources == null)
+            OpenResources();
+        if (resources?.FullMap != null)
+            resources.OpenFullMap();
+        else
+            ShowDrawer(ResourceMapDrawer);
+    }
+
+    void OpenCubeMap()
+    {
+        if (cubes == null)
+            OpenCubes();
+        if (cubes?.FullMap != null)
+            cubes.OpenFullMap();
+        else
+            ShowDrawer(CubeMapDrawer);
+    }
+
     void PopOutMap()
     {
+        bool green = opened == ResourceMapDrawer, purple = opened == CubeMapDrawer;
         CloseDrawer();
+        if (purple)
+        {
+            if (cubes == null)
+                OpenCubes();
+            cubes?.OpenFullMap();
+            return;
+        }
+
+        if (green)
+        {
+            if (resources == null)
+                OpenResources();
+            resources?.OpenFullMap();
+            return;
+        }
+
         if (pets == null)
             OpenPets();
         pets?.OpenFullMap();
@@ -373,15 +434,8 @@ public sealed class HubWindow : Window
         return row;
     }
 
-    static T Soon<T>(T control) where T : Control
-    {
-        control.Opacity = 0.4;
-        ToolTip.SetTip(control, "Coming soon");
-        return control;
-    }
-
-    /// <summary>A tool's card. A tool with no <paramref name="open"/> isn't built yet.</summary>
-    Control Card(double width, double height, string accent, string icon, string name, string about, string art, double artWidth, double artHeight, (string Icon, string Label)[] rows, string? color, Action? open, Action? configure, Func<bool>? running, (string Label, Action Act)[]? tools)
+    /// <summary>A tool's card.</summary>
+    Control Card(double width, double height, string accent, string icon, string name, string about, string art, double artWidth, double artHeight, (string Icon, string Label)[] rows, string color, Action open, Action configure, Func<bool> running, (string Label, Action Act)[] tools)
     {
         var inside = new Canvas { Width = width, Height = height };
         Place(inside, Faded(Art(art, artWidth, artHeight), vertical: false), width - artWidth - 2, 6);
@@ -394,30 +448,22 @@ public sealed class HubWindow : Window
             Place(inside, Text(rows[i].Label, 15.5, Soft), 68, 112 + i * 31);
         }
 
-        if (open != null && configure != null && running != null && tools != null)
-        {
-            var ready = new Canvas { Width = width, Height = 66 };
-            Place(ready, Hot(Art("set-" + color + ".png", 142, 60), configure, "Settings"), 16, 0);
-            Place(ready, Hot(Art("launch-" + color + ".png", 274, 60), open, "Open " + name), 196, 0);
-            Place(inside, ready, 0, height - 66);
+        var ready = new Canvas { Width = width, Height = 66 };
+        Place(ready, Hot(Art("set-" + color + ".png", 142, 60), configure, "Settings"), 16, 0);
+        Place(ready, Hot(Art("launch-" + color + ".png", 274, 60), open, "Open " + name), 196, 0);
+        Place(inside, ready, 0, height - 66);
 
-            // Once launched, the same strip holds what belongs to the tool.
-            var launched = new Grid { Width = width - 36, Height = 46, ColumnDefinitions = new ColumnDefinitions(string.Join(",", tools.Select(_ => "*"))) };
-            for (int i = 0; i < tools.Length; i++)
-            {
-                var tool = Hot(new Border { Margin = new Thickness(3, 0), Background = Brush.Parse("#800A111D"), BorderBrush = Brush.Parse(accent), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Child = Centered(Text(tools[i].Label, 14.5, Bright)) }, tools[i].Act);
-                Grid.SetColumn(tool, i);
-                launched.Children.Add(tool);
-            }
-
-            Place(inside, launched, 18, height - 60);
-            cards.Add((running, ready, launched));
-        }
-        else
+        // Once launched, the same strip holds what belongs to the tool.
+        var launched = new Grid { Width = width - 36, Height = 46, ColumnDefinitions = new ColumnDefinitions(string.Join(",", tools.Select(_ => "*"))) };
+        for (int i = 0; i < tools.Length; i++)
         {
-            var soon = new Border { Width = 240, Height = 44, Background = Brush.Parse("#600A111D"), BorderBrush = Brush.Parse(accent), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Opacity = 0.75, Child = Centered(Text("Coming soon", 16, Bright)) };
-            Place(inside, soon, width - 256, height - 58);
+            var tool = Hot(new Border { Margin = new Thickness(3, 0), Background = Brush.Parse("#800A111D"), BorderBrush = Brush.Parse(accent), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Child = Centered(Text(tools[i].Label, 14.5, Bright)) }, tools[i].Act);
+            Grid.SetColumn(tool, i);
+            launched.Children.Add(tool);
         }
+
+        Place(inside, launched, 18, height - 60);
+        cards.Add((running, ready, launched));
 
         return new Border
         {
@@ -489,8 +535,20 @@ public sealed class HubWindow : Window
             else
                 meter.Close();
         }, true);
-        Unbuilt(inside, 158, "Resource Tracker");
-        Unbuilt(inside, 206, "Hidden Cube Tracker");
+        Switch(inside, 158, "Resource Tracker", resourceToggle, () =>
+        {
+            if (resources == null)
+                OpenResources();
+            else
+                resources.Close();
+        }, true);
+        Switch(inside, 206, "Hidden Cubes", cubeToggle, () =>
+        {
+            if (cubes == null)
+                OpenCubes();
+            else
+                cubes.Close();
+        }, true);
     }
 
     void ToolkitPanel(Canvas canvas)
@@ -533,12 +591,6 @@ public sealed class HubWindow : Window
             flip();
             Refresh();
         }), 172, y);
-    }
-
-    static void Unbuilt(Canvas inside, double y, string label)
-    {
-        Place(inside, Soon(Art("p-eye.png", 22, 16)), 18, y + 4);
-        Place(inside, Soon(Text(label, 14, Soft)), 48, y + 3);
     }
 
     static void Show(Image toggle, bool on) => toggle.Source = Picture(on ? "on.png" : "off.png");
@@ -709,5 +761,43 @@ public sealed class HubWindow : Window
         }
 
         meter.Activate();
+    }
+
+    public void OpenCubes()
+    {
+        if (cubes == null)
+        {
+            cubes = new CubeWindow(spots);
+            cubes.Closed += (_, _) =>
+            {
+                cubes = null;
+                Remember(s => s.Cubes = false);
+                Refresh();
+            };
+            cubes.Show();
+            Remember(s => s.Cubes = true);
+            Refresh();
+        }
+
+        cubes.Activate();
+    }
+
+    public void OpenResources()
+    {
+        if (resources == null)
+        {
+            resources = new ResourceWindow(nodes);
+            resources.Closed += (_, _) =>
+            {
+                resources = null;
+                Remember(s => s.Resources = false);
+                Refresh();
+            };
+            resources.Show();
+            Remember(s => s.Resources = true);
+            Refresh();
+        }
+
+        resources.Activate();
     }
 }
