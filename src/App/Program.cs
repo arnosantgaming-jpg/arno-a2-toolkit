@@ -12,7 +12,7 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        // One tracker per user: a second start just exits.
+        // One toolkit per user: a second start just exits.
         string lockPath = Path.Combine(Path.GetDirectoryName(ArnoA2.Protocol.CaptureChannel.DefaultPath())!, "app.lock");
         Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);
         FileStream instance;
@@ -22,7 +22,7 @@ internal static class Program
         }
         catch (IOException)
         {
-            Console.Error.WriteLine("Arno's Pet Tracker is already running.");
+            Console.Error.WriteLine("Arno's A2 Toolkit is already running.");
             return 0;
         }
 
@@ -35,7 +35,7 @@ internal static class Program
 
 public sealed class App : Application
 {
-    public static TrackerWindow? Tracker { get; private set; }
+    public static TrackerWindow? Tracker { get; set; }
     AppState? state;
 
     public override void Initialize()
@@ -48,14 +48,14 @@ public sealed class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            AppState.Adopt();
             var store = AppState.OpenStore();
-            string daemon = Path.Combine(AppContext.BaseDirectory, "capture", "arnoa2-capture");
-            state = new AppState(store, File.Exists(daemon) ? daemon : null);
-            var maps = new MapHub(state, store.Folder);
-            Tracker = new TrackerWindow(state, maps);
-            desktop.MainWindow = Tracker;
+            string daemon = Path.Combine(AppContext.BaseDirectory, "capture", "arno-a2-capture");
+            state = new AppState(store, new ArnoA2.Meter.Store(ArnoA2.Meter.Store.DefaultFolder()), File.Exists(daemon) ? daemon : null);
+            var hub = new HubWindow(state, new MapHub(state, store.Folder));
+            desktop.MainWindow = hub;
             desktop.ShutdownRequested += (_, _) => state.Stop();
-            Tracker.Closed += (_, _) => state.Stop();
+            hub.Closed += (_, _) => state.Stop();
             state.Start();
         }
 

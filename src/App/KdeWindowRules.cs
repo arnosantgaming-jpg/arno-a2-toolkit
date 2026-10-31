@@ -11,13 +11,13 @@ namespace ArnoA2.App;
 /// </summary>
 public static class KdeWindowRules
 {
-    const string Class = "arno-pet-tracker";
-    public const string TrackerTitle = "Arno's Pet Tracker", MiniMapTitle = "Arno's Pet Tracker · mini-map";
+    const string Class = "arno-a2-toolkit";
+    public const string TrackerTitle = "Arno's A2 Toolkit · pets", MiniMapTitle = "Arno's A2 Toolkit · mini-map", MeterTitle = "Arno's A2 Toolkit · DPS meter";
     static readonly (string Group, (string Key, string Value)[] Entries)[] Rules =
     {
-        ("arno-pet-tracker-minimap", new[]
+        ("arno-a2-toolkit-minimap", new[]
         {
-            ("Description", "Arno's Pet Tracker mini-map above fullscreen games (added by Arno's Pet Tracker)"),
+            ("Description", "Arno's A2 Toolkit mini-map above fullscreen games (added by Arno's A2 Toolkit)"),
             ("wmclass", Class), ("wmclassmatch", "1"), ("wmclasscomplete", "false"),
             ("title", MiniMapTitle), ("titlematch", "1"),
             ("layer", "overlay"), ("layerrule", "2"), ("above", "true"), ("aboverule", "2"),
@@ -25,9 +25,19 @@ public static class KdeWindowRules
             ("acceptfocus", "false"), ("acceptfocusrule", "2"),
             ("skipswitcher", "true"), ("skipswitcherrule", "2"), ("skiptaskbar", "true"), ("skiptaskbarrule", "2")
         }),
-        ("arno-pet-tracker-overlay", new[]
+        ("arno-a2-toolkit-meter", new[]
         {
-            ("Description", "Arno's Pet Tracker overlay above fullscreen games (added by Arno's Pet Tracker)"),
+            ("Description", "Arno's A2 Toolkit DPS meter above fullscreen games (added by Arno's A2 Toolkit)"),
+            ("wmclass", Class), ("wmclassmatch", "1"), ("wmclasscomplete", "false"),
+            ("title", MeterTitle), ("titlematch", "1"),
+            ("layer", "overlay"), ("layerrule", "2"), ("above", "true"), ("aboverule", "2"),
+            // Clicking the overlay leaves keyboard focus with the game.
+            ("acceptfocus", "false"), ("acceptfocusrule", "2"),
+            ("skipswitcher", "true"), ("skipswitcherrule", "2"), ("skiptaskbar", "true"), ("skiptaskbarrule", "2")
+        }),
+        ("arno-a2-toolkit-pets", new[]
+        {
+            ("Description", "Arno's A2 Toolkit pets above fullscreen games (added by Arno's A2 Toolkit)"),
             ("wmclass", Class), ("wmclassmatch", "1"), ("wmclasscomplete", "false"),
             ("title", TrackerTitle), ("titlematch", "1"),
             ("layer", "overlay"), ("layerrule", "2"), ("above", "true"), ("aboverule", "2")

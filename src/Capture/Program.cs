@@ -6,7 +6,7 @@ using ArnoA2.Protocol;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("linux")]
 
-// arnoa2-capture [--socket PATH] [--parent PID] [--read FILE --own-port PORT]
+// arno-a2-capture [--socket PATH] [--parent PID] [--read FILE --own-port PORT]
 //   Live (default): capture with cap_net_raw, then drop privileges.
 //   --read: replay a capture file instead (no privileges; for tests), treating
 //   connections whose server port is PORT as the game's.
@@ -17,7 +17,7 @@ try
 }
 catch (Exception ex) when (ex is IOException or SocketException or UnauthorizedAccessException)
 {
-    Console.Error.WriteLine("arnoa2-capture: " + ex.Message);
+    Console.Error.WriteLine("arno-a2-capture: " + ex.Message);
     return 1;
 }
 

@@ -7,6 +7,6 @@
     <AssemblyName>replay</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Tracker/Tracker.csproj" />
+    <ProjectReference Include="../../src/Modules/Pets/Tracker.csproj" />
   </ItemGroup>
 </Project>

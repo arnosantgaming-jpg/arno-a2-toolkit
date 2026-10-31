@@ -1,9 +1,0 @@
-**/bin/
-**/obj/
-/build/
-/test-results/
-*.pcap
-*.pcapng
-*.bin
-*.pem
-*.key

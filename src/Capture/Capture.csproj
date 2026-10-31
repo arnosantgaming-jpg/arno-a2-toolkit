@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>ArnoA2.Capture</RootNamespace>
-    <AssemblyName>arnoa2-capture</AssemblyName>
+    <AssemblyName>arno-a2-capture</AssemblyName>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>

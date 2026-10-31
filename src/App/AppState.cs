@@ -14,6 +14,7 @@ namespace ArnoA2.App;
 public sealed class AppState
 {
     public Engine Engine { get; }
+    public ArnoA2.Meter.Engine Meter { get; }
     public Positions Positions { get; } = new();
     public Store Store { get; }
     public string CaptureStatus { get; private set; } = "Starting capture…";
@@ -26,14 +27,41 @@ public sealed class AppState
     Process? daemon;
     DateTimeOffset lastSave = DateTimeOffset.UtcNow;
 
-    public AppState(Store store, string? daemonPath)
+    public AppState(Store store, ArnoA2.Meter.Store? meter, string? daemonPath)
     {
         Store = store;
         this.daemonPath = daemonPath;
         Engine = new Engine(store);
+        Meter = new ArnoA2.Meter.Engine(meter);
         Engine.Noticed += n => Noticed?.Invoke(n);
         Engine.Decoded += (message, now) => Positions.Observe(message, Engine.LocalEntity, now);
         tick.Tick += (_, _) => Tick();
+    }
+
+    /// <summary>First run: bring over what the separate apps saved. They keep their own copy.</summary>
+    public static void Adopt(string? dataHome = null)
+    {
+        string home = dataHome ?? Path.GetDirectoryName(Path.GetDirectoryName(Store.DefaultFolder())!)!;
+        CopyOnce(Path.Combine(home, "arno-pet-tracker"), Path.Combine(home, "arno-a2-toolkit", "pets"));
+        CopyOnce(Path.Combine(home, "arno-dps-meter"), Path.Combine(home, "arno-a2-toolkit", "meter"));
+    }
+
+    static void CopyOnce(string from, string to)
+    {
+        if (!Directory.Exists(from) || Directory.Exists(to))
+            return;
+        string temp = to + ".new";
+        if (Directory.Exists(temp))
+            Directory.Delete(temp, true);
+        foreach (string file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
+        {
+            string copy = Path.Combine(temp, Path.GetRelativePath(from, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+            File.Copy(file, copy);
+        }
+
+        if (Directory.Exists(temp))
+            Directory.Move(temp, to);
     }
 
     /// <summary>First run: bring over the original Pet Tracker's collection, goals, kills and settings.</summary>
@@ -42,7 +70,7 @@ public sealed class AppState
         var store = new Store(folder ?? Store.DefaultFolder());
         if (!File.Exists(Path.Combine(store.Folder, "data.json")))
         {
-            string v1 = Path.Combine(Path.GetDirectoryName(store.Folder)!, "PetTracker");
+            string v1 = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(store.Folder)!)!, "PetTracker");
             try
             {
                 if (Store.ImportV1(v1) is { } imported)
@@ -68,7 +96,9 @@ public sealed class AppState
     {
         stop.Cancel();
         tick.Stop();
+        Meter.Damage.Finish();
         Engine.SaveIfChanged();
+        Meter.SaveIfChanged();
         try
         {
             daemon?.Kill();
@@ -82,12 +112,14 @@ public sealed class AppState
     {
         var now = DateTimeOffset.UtcNow;
         Engine.Tick(now);
+        Meter.Tick(now);
         if (now - lastSave > TimeSpan.FromSeconds(5))
         {
             lastSave = now;
             try
             {
                 Engine.SaveIfChanged();
+                Meter.SaveIfChanged();
             }
             catch (IOException ex)
             {
@@ -178,15 +210,19 @@ public sealed class AppState
         {
             case ChannelKind.FlowOpened:
                 Engine.Opened(record.Flow);
+                Meter.Opened(record.Flow, record.Text);
                 break;
             case ChannelKind.Data:
                 Engine.Data(record.Flow, record.Payload, now);
+                Meter.Data(record.Flow, record.Payload, now);
                 break;
             case ChannelKind.Gap:
                 Engine.Gap(record.Flow, record.LostBytes, now);
+                Meter.Gap(record.Flow, record.LostBytes, now);
                 break;
             case ChannelKind.FlowClosed:
                 Engine.Closed(record.Flow, now);
+                Meter.Closed(record.Flow, now);
                 Positions.Clear();
                 break;
             case ChannelKind.Status:

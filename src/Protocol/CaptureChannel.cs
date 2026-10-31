@@ -35,8 +35,8 @@ public static class CaptureChannel
 
     public static string DefaultPath()
     {
-        string runtime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } dir ? dir : Path.Combine(Path.GetTempPath(), "arno-pet-tracker-" + Environment.UserName);
-        return Path.Combine(runtime, "arno-pet-tracker", "capture.sock");
+        string runtime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } dir ? dir : Path.Combine(Path.GetTempPath(), "arno-a2-toolkit-" + Environment.UserName);
+        return Path.Combine(runtime, "arno-a2-toolkit", "capture.sock");
     }
 
     public static void Write(Stream stream, ChannelKind kind, uint flow, ReadOnlySpan<byte> payload)

@@ -37,7 +37,7 @@ var game = GameData.Instance;
 int dratona = game.Pets.Values.Single(p => p.Name == "Dratona").Id;
 int spirit = game.Pets.Values.Single(p => p.Name == "Ancient Spirit").Id;
 var store = new Store(data);
-var state = new AppState(store, daemonPath: null);
+var state = new AppState(store, null, daemonPath: null);
 var now = DateTimeOffset.UtcNow;
 // A login: collection, character, a few rewards, a position in Verteron near Eastern Cantas Valley.
 var engine = state.Engine;
@@ -63,6 +63,23 @@ finder.GetVisualDescendants().OfType<TextBox>().First().Text = "Dratona";
 Dispatcher.UIThread.RunJobs();
 Save(finder, "finder.png");
 Check(Text(finder).Contains("Souls from:") && Text(finder).Contains("3 pets"), "finder searches and shows sources");
+
+string home = Path.Combine(output, "adopt");
+if (Directory.Exists(home))
+    Directory.Delete(home, true);
+Directory.CreateDirectory(Path.Combine(home, "arno-dps-meter", "history"));
+File.WriteAllText(Path.Combine(home, "arno-dps-meter", "history", "boss-1.json"), "{}");
+AppState.Adopt(home);
+Check(File.Exists(Path.Combine(home, "arno-a2-toolkit", "meter", "history", "boss-1.json")) && File.Exists(Path.Combine(home, "arno-dps-meter", "history", "boss-1.json")), "first run copies saved data and leaves the old apps theirs");
+File.WriteAllText(Path.Combine(home, "arno-a2-toolkit", "meter", "history", "boss-1.json"), "newer");
+AppState.Adopt(home);
+Check(File.ReadAllText(Path.Combine(home, "arno-a2-toolkit", "meter", "history", "boss-1.json")) == "newer", "later starts do not copy over the toolkit's data");
+
+var hub = new HubWindow(state, maps);
+hub.Show();
+Save(hub, "hub.png");
+Check(Text(hub).Contains("DPS Meter") && Text(hub).Contains("Pets") && Text(hub).Contains("Farming Assist"), "the main window lists the tools");
+hub.Close();
 
 var settings = new SettingsWindow(state, maps, tracker);
 settings.Show();

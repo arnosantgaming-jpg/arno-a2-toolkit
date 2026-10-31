@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Product>Arno's Pet Tracker</Product>
+    <Product>Arno's A2 Toolkit</Product>
     <Authors>arnosantgaming-jpg</Authors>
     <Version>0.1.0</Version>
     <Deterministic>true</Deterministic>
