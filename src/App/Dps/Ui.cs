@@ -10,14 +10,15 @@ namespace ArnoA2.App.Dps;
 
 public static class Ui
 {
-    public static readonly IBrush Window = Brushes.Black;
-    public static readonly IBrush Panel = Brush.Parse("#0A0A0A");
-    public static readonly IBrush Line = Brush.Parse("#262626");
-    public static readonly IBrush Accent = Brush.Parse("#4FB6FF");
-    public static readonly IBrush Title = Brush.Parse("#E1EBFF");
-    public static readonly IBrush Rate = Brush.Parse("#CFE9FF");
-    public static readonly IBrush Muted = Brush.Parse("#8A9AAE");
-    public static readonly IBrush Track = Brush.Parse("#2B2B2B");
+    public static readonly Color Backdrop = Color.Parse("#140406");
+    public static readonly IBrush Window = new SolidColorBrush(Backdrop);
+    public static readonly IBrush Panel = Brush.Parse("#1C080B");
+    public static readonly IBrush Line = Brush.Parse("#4A1A20");
+    public static readonly IBrush Accent = Brush.Parse("#FF5A60");
+    public static readonly IBrush Title = Brush.Parse("#FFE8E8");
+    public static readonly IBrush Rate = Brush.Parse("#FFD2D2");
+    public static readonly IBrush Muted = Brush.Parse("#B8959A");
+    public static readonly IBrush Track = Brush.Parse("#351519");
     /// <summary>A row whose class is not known yet.</summary>
     public static readonly Color NoClass = Color.Parse("#6B7A8C");
 
@@ -90,12 +91,12 @@ public static class Ui
     }
 
     /// <summary>A button that is only its label until the pointer is over it.</summary>
-    public static Border Flat(string label, Action action, string? tip = null)
+    public static Border Flat(string label, Action action, string? tip = null, IBrush? hover = null, IBrush? text = null)
     {
-        var flat = new Border { Padding = new Thickness(5, 2), CornerRadius = new CornerRadius(3), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 10.5, Foreground = Muted } };
+        var flat = new Border { Padding = new Thickness(5, 2), CornerRadius = new CornerRadius(3), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = label, FontSize = 10.5, Foreground = text ?? Muted } };
         if (tip != null)
             ToolTip.SetTip(flat, tip);
-        flat.PointerEntered += (_, _) => flat.Background = Line;
+        flat.PointerEntered += (_, _) => flat.Background = hover ?? Line;
         flat.PointerExited += (_, _) => flat.Background = Brushes.Transparent;
         flat.PointerReleased += (_, e) =>
         {
@@ -106,10 +107,10 @@ public static class Ui
     }
 
     /// <summary>Marks a flat button as the current choice.</summary>
-    public static void Select(Border flat, bool selected)
+    public static void Select(Border flat, bool selected, IBrush? on = null, IBrush? off = null)
     {
         var label = (TextBlock)flat.Child!;
-        label.Foreground = selected ? Accent : Muted;
+        label.Foreground = selected ? on ?? Accent : off ?? Muted;
         label.FontWeight = selected ? FontWeight.SemiBold : FontWeight.Normal;
     }
 

@@ -9,7 +9,7 @@ using Avalonia.Media;
 namespace ArnoA2.App.Dps;
 
 /// <summary>Past fights, newest first. A fight opens to its players, a player to their skills.</summary>
-public sealed class HistoryWindow : Window
+public sealed class HistoryPanel : UserControl
 {
     const string FightColumns = "96,2*,44,52,52,16";
     const string PlayerColumns = "22,2*,54,54,44,*";
@@ -23,16 +23,9 @@ public sealed class HistoryWindow : Window
     int saved;
     BreakdownWindow? breakdown;
 
-    public HistoryWindow(AppState app)
+    public HistoryPanel(AppState app)
     {
         this.app = app;
-        Title = "Arno's A2 Toolkit · fight log";
-        Width = 520;
-        Height = 400;
-        MinWidth = 420;
-        MinHeight = 200;
-        Topmost = true;
-        Background = Ui.Window;
         fights = app.Meter.History;
 
         bosses = Ui.Flat("Bosses", () => Show(false));
@@ -44,14 +37,22 @@ public sealed class HistoryWindow : Window
         top.Children.Add(actions);
         top.Children.Add(title);
         DockPanel.SetDock(top, Dock.Top);
-        Content = new DockPanel { Margin = new Thickness(10), Children = { top, new ScrollViewer { Content = rows } } };
-        app.Changed += Follow;
-        Closed += (_, _) =>
-        {
-            app.Changed -= Follow;
-            breakdown?.Close();
-        };
+        Content = new DockPanel { Children = { top, new ScrollViewer { Content = rows } } };
         Show(false);
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        app.Changed += Follow;
+        Follow();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        app.Changed -= Follow;
+        breakdown?.Close();
     }
 
     // A fight that just ended appears, unless you are reading another one.

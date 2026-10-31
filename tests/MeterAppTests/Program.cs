@@ -77,7 +77,7 @@ Check(Text(meter).Contains("appears here"), "meter empties on reset");
 engine.Data(1, Cat(Frame(0x41, 0x36, Cat(Var(778), new byte[] { 0x0C, 0, 0, 0x23, 0x0B, 0x20, 0, 0, 2 })), Struck(4242, 778, 14_110_000, 90_000), Struck(4242, 778, 14_120_000, 60_000), Struck(9001, 778, 17_010_000, 40_000)), now.AddSeconds(10));
 engine.Data(1, Struck(4242, 778, 14_110_000, 80_000), now.AddSeconds(16));
 engine.Damage.Finish();
-var history = new HistoryWindow(state);
+var history = new Window { Width = 520, Height = 400, Content = new HistoryPanel(state) };
 history.Show();
 Save(history, "history.png");
 Check(Text(history).Contains("1 fights") && Text(history).Contains("Neikel of the East"), "history lists the boss fight");
@@ -86,7 +86,7 @@ skills.Show();
 Save(skills, "breakdown.png");
 Check(Text(skills).Contains("Gale Arrow"), "the breakdown names skills");
 
-var settings = new MeterSettingsWindow(state);
+var settings = new Window { Width = 440, Height = 360, Content = new MeterSettingsPanel(state) };
 settings.Show();
 Save(settings, "settings.png");
 Check(Text(settings).Contains("Fights") && Text(settings).Contains("Look"), "settings sections");

@@ -6,8 +6,8 @@ using Avalonia.Media;
 
 namespace ArnoA2.App;
 
-/// <summary>Search pets and their sources, set pins and goals, and see this session.</summary>
-public sealed class FinderWindow : Window
+/// <summary>Search pets and their sources, and set pins and goals.</summary>
+public sealed class FinderPanel : UserControl
 {
     readonly AppState app;
     readonly MapHub maps;
@@ -16,18 +16,14 @@ public sealed class FinderWindow : Window
     readonly ComboBox family = new() { ItemsSource = new[] { "All families", "Cogni", "Fera", "Natura", "Varian", "Special" }, SelectedIndex = 0 };
     readonly StackPanel results = new();
     readonly TextBlock count = new() { Foreground = Ui.Muted, FontSize = 12 };
-    readonly StackPanel sessionPanel = new() { Spacing = 6 };
+    readonly Action showMap;
     string rendered = "";
 
-    public FinderWindow(AppState app, MapHub maps)
+    public FinderPanel(AppState app, MapHub maps, Action showMap)
     {
         this.app = app;
         this.maps = maps;
-        Title = "Arno's A2 Toolkit · pet finder";
-        Width = 640;
-        Height = 760;
-        MinWidth = 440;
-        Background = Ui.Window;
+        this.showMap = showMap;
 
         var filters = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         filters.Children.Add(family);
@@ -41,17 +37,25 @@ public sealed class FinderWindow : Window
         pets.Children.Add(top);
         pets.Children.Add(new ScrollViewer { Content = results });
 
-        var tabs = new TabControl { Margin = new Thickness(14) };
-        tabs.Items.Add(new TabItem { Header = "Pets", Content = pets });
-        tabs.Items.Add(new TabItem { Header = "Session", Content = new ScrollViewer { Content = sessionPanel } });
-        Content = tabs;
+        Content = pets;
 
         search.TextChanged += (_, _) => Refresh(force: true);
         hideMaxed.IsCheckedChanged += (_, _) => Refresh(force: true);
         family.SelectionChanged += (_, _) => Refresh(force: true);
-        app.Changed += Tick;
-        Closed += (_, _) => app.Changed -= Tick;
         Refresh(force: true);
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        app.Changed += Tick;
+        Tick();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        app.Changed -= Tick;
     }
 
     void Tick() => Refresh(force: false);
@@ -77,7 +81,6 @@ public sealed class FinderWindow : Window
 
     void Refresh(bool force)
     {
-        RefreshSession();
         var engine = app.Engine;
         var matches = Matches().Take(80).ToArray();
         string key = (search.Text ?? "") + family.SelectedIndex + hideMaxed.IsChecked + string.Join(",", engine.Settings.Pins) + "|" + string.Join(",", matches.Select(p => engine.Collection.Pets[p.Id].ProgressText + engine.Collection.Pets[p.Id].TargetRank));
@@ -125,7 +128,7 @@ public sealed class FinderWindow : Window
         actions.Children.Add(Ui.Button("Farm on map", () =>
         {
             maps.SetTarget("Pet", pet.Id);
-            (Owner as TrackerWindow ?? App.Tracker)?.OpenFullMap();
+            showMap();
         }));
         panel.Children.Add(actions);
         if (progress.TargetRank is int target)
@@ -137,12 +140,37 @@ public sealed class FinderWindow : Window
             });
         return panel;
     }
+}
+
+/// <summary>Souls, kills and rank-ups since the session began.</summary>
+public sealed class SessionPanel : UserControl
+{
+    readonly AppState app;
+    readonly StackPanel sessionPanel = new() { Spacing = 6 };
+
+    public SessionPanel(AppState app)
+    {
+        this.app = app;
+        Content = sessionPanel;
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        app.Changed += RefreshSession;
+        RefreshSession();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        app.Changed -= RefreshSession;
+    }
 
     void RefreshSession()
     {
         var s = app.Engine.Session;
         sessionPanel.Children.Clear();
-        sessionPanel.Children.Add(Ui.Heading("This session"));
         if (s.StartedUtc is not { } started)
         {
             sessionPanel.Children.Add(Ui.Note("Souls you earn and pets you rank up appear here."));

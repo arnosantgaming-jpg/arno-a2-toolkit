@@ -45,13 +45,12 @@ public sealed class BreakdownWindow : Window
         MinWidth = 340;
         MinHeight = 160;
         Topmost = true;
-        Background = Ui.Window;
         var heading = new Grid { ColumnDefinitions = new ColumnDefinitions(Columns), Height = 18 };
         foreach (var (text, column, right) in new[] { ("SKILL", 0, false), ("HITS", 1, true), ("CRIT", 2, true), ("TOTAL", 3, true), ("%", 4, true) })
             heading.Children.Add(Ui.Cell(text, 9, Ui.Muted, column, right));
         var top = new StackPanel { Children = { title, summary, heading } };
         DockPanel.SetDock(top, Dock.Top);
-        Content = new DockPanel { Margin = new Thickness(10), Children = { top, new ScrollViewer { Content = rows } } };
+        ToolTheme.Frame(this, "SKILLS", ToolTheme.Meter, new DockPanel { Margin = new Thickness(10, 0, 10, 10), Children = { top, new ScrollViewer { Content = rows } } }, Ui.Window, Ui.Line);
     }
 
     void Refresh()

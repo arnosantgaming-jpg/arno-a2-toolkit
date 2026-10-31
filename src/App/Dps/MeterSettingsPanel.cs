@@ -5,16 +5,12 @@ using Avalonia.Layout;
 
 namespace ArnoA2.App.Dps;
 
-public sealed class MeterSettingsWindow : Window
+public sealed class MeterSettingsPanel : UserControl
 {
-    public MeterSettingsWindow(AppState app, Action? opacityChanged = null)
+    public MeterSettingsPanel(AppState app, Action? opacityChanged = null)
     {
-        Title = "Arno's A2 Toolkit · meter settings";
-        Width = 440;
-        Height = 360;
-        Background = Ui.Window;
         var engine = app.Meter;
-        var panel = new StackPanel { Spacing = 10, Margin = new Thickness(20) };
+        var panel = new StackPanel { Spacing = 10 };
 
         panel.Children.Add(Ui.Heading("Fights"));
         var quiet = new NumericUpDown { Value = engine.Settings.MeterQuietSeconds, Minimum = 3, Maximum = 60, Increment = 1, FormatString = "0", Width = 130 };

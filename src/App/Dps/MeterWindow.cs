@@ -18,8 +18,6 @@ public sealed class MeterWindow : Window
     readonly TextBlock clock = new() { FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Ui.Title, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock status = new() { FontSize = 9.5, Foreground = Ui.Muted, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(2, 3, 2, 0) };
     readonly Border fight, session, boss, backdrop;
-    MeterSettingsWindow? settings;
-    HistoryWindow? history;
     BreakdownWindow? breakdown;
     bool showSession;
     string rendered = "";
@@ -39,6 +37,7 @@ public sealed class MeterWindow : Window
         // The window itself is see-through; the backdrop below carries the chosen opacity.
         TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
         Background = Brushes.Transparent;
+        ToolTheme.Tint(this, ToolTheme.Meter);
 
         fight = Ui.Flat("Fight", () => Show(false), "This fight, or the last one until the next starts");
         session = Ui.Flat("Session", () => Show(true), "Every fight since the last reset");
@@ -53,8 +52,6 @@ public sealed class MeterWindow : Window
             app.Meter.Damage.Reset();
             Refresh();
         }));
-        actions.Children.Add(Ui.Flat("Log", OpenHistory, "Past fights"));
-        actions.Children.Add(Ui.Flat("⚙", OpenSettings, "Settings"));
         actions.Children.Add(Ui.Flat("✕", Close, "Close"));
         clock.Margin = new Thickness(0, 0, 4, 0);
 
@@ -100,8 +97,6 @@ public sealed class MeterWindow : Window
         Closed += (_, _) =>
         {
             app.Changed -= Refresh;
-            settings?.Close();
-            history?.Close();
             breakdown?.Close();
         };
         Refresh();
@@ -115,30 +110,6 @@ public sealed class MeterWindow : Window
             Position = new PixelPoint(x, y);
         else if (Screens.Primary is { } main)
             Position = new PixelPoint(main.WorkingArea.X + 24, main.WorkingArea.Y + 144);
-    }
-
-    void OpenSettings()
-    {
-        if (settings == null)
-        {
-            settings = new MeterSettingsWindow(app, ApplyOpacity);
-            settings.Closed += (_, _) => settings = null;
-            settings.Show();
-        }
-
-        settings.Activate();
-    }
-
-    void OpenHistory()
-    {
-        if (history == null)
-        {
-            history = new HistoryWindow(app);
-            history.Closed += (_, _) => history = null;
-            history.Show();
-        }
-
-        history.Activate();
     }
 
     void ToggleBoss()
@@ -162,7 +133,7 @@ public sealed class MeterWindow : Window
         breakdown.Show();
     }
 
-    void ApplyOpacity() => backdrop.Background = new SolidColorBrush(Colors.Black, app.Meter.Settings.MeterOpacity / 100.0);
+    public void ApplyOpacity() => backdrop.Background = new SolidColorBrush(Ui.Backdrop, app.Meter.Settings.MeterOpacity / 100.0);
 
     void Show(bool wholeSession)
     {

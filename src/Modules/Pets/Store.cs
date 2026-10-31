@@ -37,9 +37,18 @@ public sealed class Settings
     public bool MerchantSuggestions { get; set; } = true;
     /// <summary>New characters join the active account's collection automatically.</summary>
     public bool NewCharactersJoin { get; set; } = true;
+    /// <summary>How solid the tracker's background is, in percent.</summary>
+    public int TrackerOpacity { get; set; } = 50;
+    /// <summary>Shows the pet behind the tracker's list.</summary>
+    public bool TrackerArt { get; set; } = true;
+    public int? TrackerX { get; set; }
+    public int? TrackerY { get; set; }
+    public double? TrackerWidth { get; set; }
+    public double? TrackerHeight { get; set; }
 
     public void Normalize()
     {
+        TrackerOpacity = Math.Clamp(TrackerOpacity, 20, 100);
         Mode = Mode is "Nearby" ? "Nearby" : "Recent";
         Sort = Sort is "Recent only" or "Closest to next rank" ? Sort : "Unfinished first";
         InactiveSeconds = Math.Clamp(InactiveSeconds, 5, 600);

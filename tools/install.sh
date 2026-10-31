@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install the build for this user: app menu entry and `arno-a2-toolkit` command; with
-# --autostart, also start at login. Re-run after rebuilding to update.
+# --autostart, also start at login (the toolkit has a switch for that too). Re-run after rebuilding to update.
 set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 build="$root/build/linux-x64"
@@ -55,8 +55,6 @@ printf '%s\n' "$entry" > "$share/applications/$id.desktop"
 if [[ "$autostart" == yes ]]; then
     mkdir -p "$config/autostart"
     printf '%s\nX-KDE-autostart-after=panel\n' "$entry" > "$config/autostart/$id.desktop"
-else
-    rm -f -- "$config/autostart/$id.desktop"
 fi
 command -v update-desktop-database >/dev/null && update-desktop-database "$share/applications" 2>/dev/null || true
 
@@ -65,7 +63,7 @@ if ! getcap "$app/capture/arno-a2-capture" | grep -q cap_net_raw; then
     sudo setcap cap_net_raw=ep "$app/capture/arno-a2-capture"
 fi
 
-printf "\nInstalled to %s\nMenu: \"Arno's A2 Toolkit\"   Command: %s   Start at login: %s\n" "$app" "$id" "$autostart"
+printf "\nInstalled to %s\nMenu: \"Arno's A2 Toolkit\"   Command: %s\n" "$app" "$id"
 if [[ -f "$config/autostart/arnos-a2-pet-tracker.desktop" ]]; then
     printf '\nNote: the older "Arno'"'"'s A2 Pet Tracker" also starts at login. Run only one of them:\n  rm %s\n' "$config/autostart/arnos-a2-pet-tracker.desktop"
 fi

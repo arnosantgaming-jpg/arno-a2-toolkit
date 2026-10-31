@@ -10,14 +10,20 @@ namespace ArnoA2.App;
 /// <summary>Colours and small builders shared by the windows.</summary>
 public static class Ui
 {
-    public static readonly IBrush Window = Brush.Parse("#0B1118");
-    public static readonly IBrush Panel = Brush.Parse("#121B25");
-    public static readonly IBrush Line = Brush.Parse("#263241");
-    public static readonly IBrush Gold = Brush.Parse("#C9A227");
-    public static readonly IBrush Bright = Brush.Parse("#FFD54F");
-    public static readonly IBrush Muted = Brush.Parse("#8A9AAE");
+    public static readonly IBrush Window = Brush.Parse("#060E1C");
+    public static readonly IBrush Panel = Brush.Parse("#0C1A2E");
+    public static readonly IBrush Line = Brush.Parse("#1F3A5C");
+    public static readonly IBrush Accent = Brush.Parse("#2E8CFF");
+    public static readonly IBrush Bright = Brush.Parse("#6CC0FF");
+    public static readonly IBrush Muted = Brush.Parse("#8FA6C2");
     public static readonly IBrush Good = Brush.Parse("#81C784");
-    public static readonly IBrush Track = Brush.Parse("#2E3A48");
+    public static readonly IBrush Track = Brush.Parse("#1E2E44");
+
+    public static readonly Color Backdrop = Color.Parse("#060E1C");
+
+    public static Border Flat(string label, Action action, string? tip = null) => Dps.Ui.Flat(label, action, tip, Line, Muted);
+
+    public static void Select(Border flat, bool selected) => Dps.Ui.Select(flat, selected, Bright, Muted);
 
     public static Button Button(string label, Action action, string? tip = null)
     {
@@ -94,13 +100,13 @@ public sealed class PetRow : Border
             Height = 7,
             MinHeight = 7,
             CornerRadius = new CornerRadius(4),
-            Background = unknown ? Brush.Parse("#3A3F2A") : Ui.Track,
-            Foreground = progress.Max ? Ui.Good : progress.Certainty == Certainty.Exact ? Ui.Bright : Ui.Gold
+            Background = unknown ? Brush.Parse("#22344A") : Ui.Track,
+            Foreground = progress.Max ? Ui.Good : progress.Certainty == Certainty.Exact ? Ui.Bright : Ui.Accent
         });
         if (progress.RankUpReady)
             body.Children.Add(new TextBlock { Text = progress.Rank == 0 ? "Ready to unlock in game" : "Ready to rank up in game", FontSize = 11, Foreground = Ui.Bright });
         else if (unknown)
-            body.Children.Add(new TextBlock { Text = "Soul total unknown · log in with the tracker running to sync", FontSize = 11, Foreground = Ui.Gold, TextWrapping = TextWrapping.Wrap });
+            body.Children.Add(new TextBlock { Text = "Soul total unknown · log in with the tracker running to sync", FontSize = 11, Foreground = Ui.Accent, TextWrapping = TextWrapping.Wrap });
         if (price is long kina)
             body.Children.Add(new TextBlock { Text = $"Black Cloud Merchant · {kina:N0} Kina", FontSize = 12, Foreground = Ui.Bright });
         if (!string.IsNullOrEmpty(note))

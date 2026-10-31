@@ -20,5 +20,6 @@
     <Content Include="../../assets/portraits/*.png" Link="portraits/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/crystals/*.png" Link="crystals/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/maps/**/*.jpg" Link="maps/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../assets/hub/*.png" Link="hub/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

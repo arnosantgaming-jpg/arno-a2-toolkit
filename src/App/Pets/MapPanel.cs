@@ -8,9 +8,9 @@ using ArnoA2.App.Map;
 
 namespace ArnoA2.App;
 
-/// <summary>Resizable full region map for a second monitor: target picker, ranked farming
-/// spots and live position. F11 toggles fullscreen.</summary>
-public sealed class FullMapWindow : Window
+/// <summary>The full region map: target picker, ranked farming spots and live position.
+/// Lives in a launcher drawer or in its own window.</summary>
+public sealed class MapPanel : UserControl
 {
     readonly MapHub hub;
     readonly MapCanvas canvas;
@@ -20,7 +20,7 @@ public sealed class FullMapWindow : Window
     readonly CheckBox follow = new() { Content = "Follow me" };
     readonly CheckBox spawns = new() { Content = "Show all spawn dots" };
     readonly TextBlock position = new() { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightSlateGray, FontSize = 12 };
-    readonly TextBlock guidance = new() { TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.SemiBold, Foreground = Brush.Parse("#FFD54F") };
+    readonly TextBlock guidance = new() { TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.SemiBold, Foreground = Brush.Parse("#6CC0FF") };
     readonly StackPanel spots = new() { Spacing = 6 };
     readonly TextBlock minimapStatus = new() { TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightSlateGray, FontSize = 11 };
     string renderedSpots = "";
@@ -31,15 +31,9 @@ public sealed class FullMapWindow : Window
         ("Natura", "Family: Natura"), ("Varian", "Family: Varian"), ("Special", "Family: Special"), ("Pet", "One pet")
     };
 
-    public FullMapWindow(MapHub hub)
+    public MapPanel(MapHub hub, Action? fullscreen = null)
     {
         this.hub = hub;
-        Title = "Arno's A2 Toolkit · map";
-        Width = 1280;
-        Height = 820;
-        MinWidth = 640;
-        MinHeight = 420;
-        Background = Brush.Parse("#0B1118");
         canvas = new MapCanvas(hub, minimap: false) { Zoom = hub.Preferences.FullZoom };
 
         var side = new StackPanel { Spacing = 10, Margin = new Thickness(14) };
@@ -89,8 +83,8 @@ public sealed class FullMapWindow : Window
         side.Children.Add(reader);
         side.Children.Add(Ui.Button("Recalibrate minimap", hub.RecalibrateMinimap));
         side.Children.Add(minimapStatus);
-        var fullscreen = Ui.Button("Fullscreen (F11)", ToggleFullscreen);
-        side.Children.Add(fullscreen);
+        if (fullscreen != null)
+            side.Children.Add(Ui.Button("Fullscreen (F11)", fullscreen));
         side.Children.Add(position);
         side.Children.Add(guidance);
         side.Children.Add(new TextBlock { Text = "Best spots", FontSize = 18, Margin = new Thickness(0, 8, 0, 0) });
@@ -105,7 +99,7 @@ public sealed class FullMapWindow : Window
         });
 
         var layout = new DockPanel();
-        var scroll = new ScrollViewer { Width = 300, Content = side, Background = Brush.Parse("#0F1720") };
+        var scroll = new ScrollViewer { Width = 300, Content = side, Background = Brush.Parse("#0A1424") };
         DockPanel.SetDock(scroll, Dock.Left);
         layout.Children.Add(scroll);
         layout.Children.Add(canvas);
@@ -119,30 +113,25 @@ public sealed class FullMapWindow : Window
             refreshing = false;
             Update();
         };
-        KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.F11)
-                ToggleFullscreen();
-            else if (e.Key == Key.Escape && WindowState == WindowState.FullScreen)
-                WindowState = WindowState.Normal;
-        };
-        hub.Changed += Update;
-        Opened += (_, _) =>
-        {
-            hub.Attach();
-            if (hub.Player is { } player)
-                canvas.Center = player;
-            Update();
-        };
-        Closed += (_, _) =>
-        {
-            hub.Changed -= Update;
-            hub.Save();
-            hub.Detach();
-        };
     }
 
-    void ToggleFullscreen() => WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        hub.Changed += Update;
+        hub.Attach();
+        if (hub.Player is { } player)
+            canvas.Center = player;
+        Update();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        hub.Changed -= Update;
+        hub.Save();
+        hub.Detach();
+    }
 
     void ChangeTarget()
     {
@@ -186,7 +175,7 @@ public sealed class FullMapWindow : Window
                 Content = text,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
-                BorderBrush = i == hub.TargetSpot ? Brush.Parse("#FFD54F") : Brushes.Transparent,
+                BorderBrush = i == hub.TargetSpot ? Brush.Parse("#6CC0FF") : Brushes.Transparent,
                 BorderThickness = new Thickness(1)
             };
             button.Click += (_, _) =>
@@ -201,4 +190,27 @@ public sealed class FullMapWindow : Window
             spots.Children.Add(button);
         }
     }
+}
+
+/// <summary>The map on its own, for a second monitor. F11 toggles fullscreen.</summary>
+public sealed class FullMapWindow : Window
+{
+    public FullMapWindow(MapHub hub)
+    {
+        Title = "Arno's A2 Toolkit · map";
+        Width = 1280;
+        Height = 820;
+        MinWidth = 640;
+        MinHeight = 420;
+        ToolTheme.Frame(this, "MAP", ToolTheme.Pets, new MapPanel(hub, ToggleFullscreen), Ui.Window, Ui.Line);
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.F11)
+                ToggleFullscreen();
+            else if (e.Key == Key.Escape && WindowState == WindowState.FullScreen)
+                WindowState = WindowState.Normal;
+        };
+    }
+
+    void ToggleFullscreen() => WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
 }

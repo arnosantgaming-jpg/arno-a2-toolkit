@@ -55,9 +55,9 @@ var maps = new MapHub(state, data);
 var tracker = new TrackerWindow(state, maps);
 tracker.Show();
 Save(tracker, "tracker.png");
-Check(Text(tracker).Contains("Dratona") && Text(tracker).Contains("43/75") && Text(tracker).Contains("Session: 5 souls"), "tracker lists recent pets with souls and the session");
+Check(Text(tracker).Contains("Dratona") && Text(tracker).Contains("43/75") && Text(tracker).Contains("Session: 5 souls") && Text(tracker).Contains("Cogni"), "tracker lists recent pets with type, souls and the session");
 
-var finder = new FinderWindow(state, maps);
+var finder = new Window { Width = 640, Height = 760, Content = new FinderPanel(state, maps, () => { }) };
 finder.Show();
 finder.GetVisualDescendants().OfType<TextBox>().First().Text = "Dratona";
 Dispatcher.UIThread.RunJobs();
@@ -78,10 +78,27 @@ Check(File.ReadAllText(Path.Combine(home, "arno-a2-toolkit", "meter", "history",
 var hub = new HubWindow(state, maps);
 hub.Show();
 Save(hub, "hub.png");
-Check(Text(hub).Contains("DPS Meter") && Text(hub).Contains("Pets") && Text(hub).Contains("Farming Assist"), "the main window lists the tools");
+Check(Text(hub).Contains("DPS Meter") && Text(hub).Contains("Pet Tracker") && Text(hub).Contains("Hidden Cube Tracker") && Text(hub).Contains("Coming soon"), "the main window lists the tools");
+hub.OpenPets();
+hub.OpenMeter();
+Dispatcher.UIThread.RunJobs();
+Save(hub, "hub-launched.png");
+Check(Text(hub).Contains("Find a Pet") && Text(hub).Contains("Mini-map"), "a launched tool shows its buttons on its card");
+hub.ShowDrawer(HubWindow.MeterDrawer);
+Thread.Sleep(400);
+Save(hub, "hub-meter-drawer.png");
+Check(Text(hub).Contains("Background opacity"), "the meter's settings open in a drawer");
+hub.ShowDrawer(HubWindow.MapDrawer);
+Thread.Sleep(400);
+Save(hub, "hub-map-drawer.png");
+Check(Text(hub).Contains("Open in Window") && Text(hub).Contains("Best spots"), "the map opens in a drawer");
+hub.ShowDrawer(HubWindow.FinderDrawer);
+Thread.Sleep(400);
+Save(hub, "hub-pets-drawer.png");
+Check(Text(hub).Contains("pets"), "the finder opens in a drawer");
 hub.Close();
 
-var settings = new SettingsWindow(state, maps, tracker);
+var settings = new Window { Width = 500, Height = 720, Content = new ScrollViewer { Content = new StackPanel { Children = { new PetSettingsPanel(state, maps), new ToolkitSettingsPanel(state) } } } };
 settings.Show();
 Save(settings, "settings.png");
 Check(Text(settings).Contains("Mini-map") && Text(settings).Contains("Capture"), "settings sections");
@@ -90,9 +107,17 @@ maps.Preferences.MiniShape = "Round";
 tracker.OpenMiniMap();
 var mini = tracker.MiniMap!;
 mini.StopCamera(); // headings below are set by hand
+mini.Resize(MiniMapWindow.FullSize / 2);
+Dispatcher.UIThread.RunJobs();
+Check(mini.Bounds.Width == 150 && mini.Bounds.Height == 150 + MiniMapWindow.Footer, "the mini-map shrinks to half size");
+Save(mini, "minimap-half.png");
+mini.Resize(MiniMapWindow.FullSize);
+Dispatcher.UIThread.RunJobs();
 Thread.Sleep(400);
 foreach (var b in mini.GetVisualDescendants().OfType<Border>().Where(b => b.Child is StackPanel { Orientation: Avalonia.Layout.Orientation.Horizontal } sp && sp.Children.OfType<GoldSlider>().Any()))
     b.IsVisible = true; // show the hover controls for the screenshot
+foreach (var b in mini.GetVisualDescendants().OfType<Border>().Where(b => b.Child is TextBlock { Text: "✥ Move" }))
+    b.IsVisible = true;
 Save(mini, "minimap-round.png");
 var slider = mini.GetVisualDescendants().OfType<GoldSlider>().Single();
 var pill = slider.GetVisualAncestors().OfType<Border>().First();
