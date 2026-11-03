@@ -80,6 +80,46 @@ var hub = new HubWindow(state, maps);
 hub.Show();
 Save(hub, "hub.png");
 Check(Text(hub).Contains("DPS Meter") && Text(hub).Contains("Pet Tracker") && Text(hub).Contains("Hidden Cube Tracker") && !Text(hub).Contains("Coming soon"), "the main window lists the tools");
+Check(Text(hub).Contains("Server Ping"), "the ping overlay has a switch");
+var cubeFile = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../data/CubeSpots.json"))).RootElement;
+var firstRegion = cubeFile.EnumerateObject().First();
+var firstGroup = firstRegion.Value[0];
+float cubeX = (float)firstGroup.GetProperty("Spots")[0][0].GetDouble(), cubeY = (float)firstGroup.GetProperty("Spots")[0][1].GetDouble();
+byte[] CubeBody(int size, int at, float x, float y)
+{
+    var body = new byte[size];
+    BitConverter.TryWriteBytes(body.AsSpan(at), x);
+    BitConverter.TryWriteBytes(body.AsSpan(at + 4), y);
+    return body;
+}
+
+var cubeWatch = new CubeWatch();
+var cubeTime = DateTimeOffset.UnixEpoch;
+var sighting = cubeWatch.See(new(0x34, 0x36, CubeBody(55, 9, cubeX, cubeY)), cubeTime);
+Check(sighting != null && sighting.Region == firstRegion.Name && sighting.Area == firstGroup.GetProperty("Area").GetString(), "a cube message on a cube spot is a sighting");
+Check(cubeWatch.See(new(0x34, 0x36, CubeBody(55, 9, cubeX, cubeY)), cubeTime.AddSeconds(8)) == null, "the same cube alerts once");
+Check(cubeWatch.See(new(0x34, 0x36, CubeBody(55, 9, cubeX, cubeY)), cubeTime.AddMinutes(2)) != null, "a later cube on that spot alerts again");
+var otherWatch = new CubeWatch();
+Check(otherWatch.See(new(0x1E, 0x56, CubeBody(55, 9, cubeX, cubeY)), cubeTime) == null, "another message kind is not a sighting");
+Check(otherWatch.See(new(0x34, 0x36, CubeBody(59, 9, cubeX, cubeY)), cubeTime) == null, "another size is not a sighting");
+Check(otherWatch.See(new(0x34, 0x36, CubeBody(55, 5, cubeX, cubeY)), cubeTime) == null, "a position elsewhere in the message is not a sighting");
+Check(otherWatch.See(new(0x34, 0x36, CubeBody(55, 9, cubeX + 200, cubeY)), cubeTime) == null, "something 2 m from a spot is not a cube");
+Check(HubWindow.CubeText("Owllau", 12.4) == "Hidden Cube: Owllau, 12 m away" && HubWindow.CubeText("Owllau", null) == "Hidden Cube: Owllau", "the alert says where the cube is");
+var cubeNote = new CubeAlertWindow("Hidden Cube: Owllau, 12 m away");
+cubeNote.Show();
+Dispatcher.UIThread.RunJobs();
+Check(cubeNote.Title == KdeWindowRules.CubeAlertTitle && cubeNote.Topmost && Text(cubeNote).Contains("Owllau"), "the alert stays on top");
+Save(cubeNote, "cube-alert.png");
+cubeNote.Close();
+hub.OpenPing();
+var pingWindow = new PingWindow(state, null, null, (_, _) => { });
+pingWindow.Show();
+Dispatcher.UIThread.RunJobs();
+Check(pingWindow.Title == KdeWindowRules.PingTitle && Text(pingWindow).Contains("PING") && Text(pingWindow).Contains("—"), "the ping overlay waits for a reading");
+Save(pingWindow, "ping.png");
+pingWindow.Close();
+Check(PingWindow.Reading(42) == "42 ms" && PingWindow.Reading(null) == "—", "the ping reads in milliseconds");
+Check(PingWindow.Tint(79) != PingWindow.Tint(80) && PingWindow.Tint(149) != PingWindow.Tint(150) && PingWindow.Tint(null) != PingWindow.Tint(1), "the ping is coloured by how good it is");
 hub.OpenPets();
 hub.OpenMeter();
 Dispatcher.UIThread.RunJobs();
@@ -121,6 +161,11 @@ hub.OfferUpdate(new("9.9.9", "https://github.com/arnosantgaming-jpg/arno-a2-tool
 Dispatcher.UIThread.RunJobs();
 Check(Text(hub).Contains("Update to v9.9.9"), "a newer release shows the update prompt");
 Save(hub, "hub-update.png");
+hub.ShowDrawer(HubWindow.PhoneDrawer);
+for (int i = 0; i < 5; i++)
+    Dispatcher.UIThread.RunJobs();
+Check(Text(hub).Contains("Open the map to phones"), "the menu's Phone Map opens the phone switch");
+Save(hub, "hub-phone-drawer.png");
 hub.ShowDrawer(HubWindow.MeterDrawer);
 Thread.Sleep(400);
 Save(hub, "hub-meter-drawer.png");
@@ -558,6 +603,48 @@ using (var island = SkiaSharp.SKBitmap.Decode(Path.Combine(AppContext.BaseDirect
     maps.AcceptMinimap(new ArnoA2.App.Map.MinimapFix(truth.X + 60 * metre, truth.Y, 0.5, 2.74), null, "abyss");
     Check(Math.Abs((maps.Player!.Value.X - truth.X) / metre - 60) < 1e-6, "a match 58 m away is taken at once");
     Check(Math.Abs(ArnoA2.App.Map.MinimapMatcher.OnMap(ArnoA2.App.Map.WorldMaps.All["verteron"], 2.74) - 2.74) < 1e-9 && Math.Abs(ArnoA2.App.Map.MinimapMatcher.OnMap(ArnoA2.App.Map.WorldMaps.All["altgard"], 2.74) - 2.74 / 2) < 0.03, "one minimap calibration serves Verteron and, at half the tile pixels per metre, Altgard");
+}
+// The phone map: nothing without the link's key, and tiles can't reach outside the maps folder.
+{
+    var board = new PhoneBoard(maps, new PetLayer(state, maps), new ResourceLayer(maps, store.Folder), new CubeLayer(maps, store.Folder), "", _ => { });
+    Check(!board.Running && board.Link == null, "the phone map is off until it's turned on");
+    Check(board.Start(0), "the phone map starts");
+    using var web = new System.Net.Http.HttpClient();
+    string Url(string path) => $"http://127.0.0.1:{board.Port}{path}";
+    string secret = board.Link?.Split("?k=")[1] ?? throw new Exception("no link (no network here?)");
+    (int Status, string Body) Get(string path, System.Net.Http.HttpMethod? method = null)
+    {
+        var asking = web.SendAsync(new System.Net.Http.HttpRequestMessage(method ?? System.Net.Http.HttpMethod.Get, Url(path)));
+        while (!asking.IsCompleted)
+            Dispatcher.UIThread.RunJobs();
+        var reply = asking.Result;
+        var reading = reply.Content.ReadAsStringAsync();
+        while (!reading.IsCompleted)
+            Dispatcher.UIThread.RunJobs();
+        return ((int)reply.StatusCode, reading.Result);
+    }
+
+    Check(Get("/").Status == 403 && Get("/state?k=wrong").Status == 403 && Get("/tile?region=verteron&c=3&r=3").Status == 403, "the phone map answers nothing without the key");
+    Check(Get($"/?k={secret}").Body.Contains("wakeLock"), "the key opens the phone page");
+    var live = Get($"/state?k={secret}");
+    Check(live.Status == 200 && live.Body.Contains("\"region\"") && live.Body.Contains("\"cubes\""), "the phone gets the map's state");
+    Check(Get($"/dots?k={secret}&layer=cubes").Body.StartsWith('['), "the phone gets a tool's dots");
+    Check(Get($"/tile?k={secret}&region=..&c=0&r=0").Status == 404 && Get($"/tile?k={secret}&region=verteron&c=../../x&r=0").Status == 404, "a tile request can't leave the maps folder");
+    Check(Get($"/do?k={secret}&a=nothing", System.Net.Http.HttpMethod.Post).Status == 400, "the phone can only ask for known actions");
+    Check(board.Code() != null, "the link becomes a QR code");
+    Check(PhoneServer.Network(System.Net.IPAddress.Parse("192.168.1.74"), 24) == "192.168.1.0/24" && PhoneServer.Network(System.Net.IPAddress.Parse("10.20.135.7"), 20) == "10.20.128.0/20", "the home network is worked out from the address");
+    Check(string.Join(" ", LinuxFirewall.Ufw("192.168.1.0/24", 8766)) == "/usr/bin/ufw allow from 192.168.1.0/24 to any port 8766 proto tcp", "ufw opens the port to the home network only");
+    Check(LinuxFirewall.Firewalld("192.168.1.0/24", 8766)[2].Contains("source address=192.168.1.0/24 port port=8766 protocol=tcp accept"), "firewalld opens the port to the home network only");
+    Check(WindowsFirewall.Add(8766).Contains("localport=8766 remoteip=localsubnet"), "Windows opens the port to the local subnet only");
+    var phonePanel = new Window { Width = 620, Height = 620, Content = new PhoneSettings(board, _ => { }) };
+    phonePanel.Show();
+    Check(phonePanel.GetVisualDescendants().OfType<Image>().Single().IsVisible && Text(phonePanel).Contains("Open the map to phones"), "the settings show the link's code while it's on");
+    Save(phonePanel, "phone-settings.png");
+    phonePanel.Close();
+    board.NewLink();
+    Check(board.Link?.Split("?k=")[1] != secret && Get($"/state?k={secret}").Status is 403 or 0, "a new link shuts out the old one");
+    board.Stop();
+    Check(!board.Running, "the phone map stops");
 }
 var (centreX, centreY) = abyss.Normalize(abyss.World(0.5, 0.5).X, abyss.World(0.5, 0.5).Y);
 Check(Math.Abs(centreX - 0.5) < 1e-9 && Math.Abs(centreY - 0.5) < 1e-9, "Abyss map transform round trip");

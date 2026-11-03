@@ -80,6 +80,12 @@ public sealed class CubeSettingsPanel : UserControl
     {
         var saved = layer.Preferences;
         var panel = new StackPanel { Spacing = 10 };
+        panel.Children.Add(Ui.Heading("Alerts"));
+        panel.Children.Add(Ui.Toggle("Alert me when a cube appears", saved.Alerts, v =>
+        {
+            saved.Alerts = v;
+            layer.Save();
+        }));
         panel.Children.Add(Ui.Heading("Checked spots"));
         panel.Children.Add(new CubePicker(layer));
         panel.Children.Add(Ui.Number("Skip checked spots for minutes", saved.CheckedMinutes, 5, 240, v =>

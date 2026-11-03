@@ -6,8 +6,9 @@ namespace ArnoA2.Capture;
 public interface IPacketSource : IDisposable
 {
     bool Offline { get; }
-    /// <summary>Keeps only packets this machine received that match the expression.</summary>
-    void FilterInbound(string expression);
+    /// <summary>Keeps only packets this machine sent or received that match the expression,
+    /// marking the ones it sent as outgoing.</summary>
+    void FilterOwn(string expression);
     /// <summary>Next TCP segment, null on read timeout. Sets end at the end of a file.</summary>
     Segment? Next(out bool end);
 }

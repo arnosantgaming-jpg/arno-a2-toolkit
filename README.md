@@ -6,17 +6,33 @@ passive capture program:
 - **Pets:** ranks, souls, live map and farming spots.
 - **DPS Meter:** damage, skill breakdown, boss view and a fight log.
 - **Resource Tracker:** where gathering nodes are, by type, with the closest of each.
-- **Hidden Cube Tracker:** every place a cube can appear, ranked, skipping spots you checked.
+- **Hidden Cube Tracker:** every place a cube can appear, ranked, skipping spots you checked,
+  with a sound and an on-screen alert when the game reports a cube (still being tested: it may
+  only fire once a cube is being opened). Turn it off in the tool's settings. On KDE the toolkit adds its window rules once, so overlays stay above the game.
 
-All tools share one mini-map: a tool's Mini-map button adds its ring and markers.
+All tools share one mini-map: a tool's Mini-map button adds its ring and markers. **Server
+Ping** in the Tools Overlay panel adds a small always-on-top ping readout you can drag anywhere.
 
 Built on Linux (CachyOS, KDE Wayland), where the game runs through Steam and Proton. The
 Windows version is built from the same code and has been tested on a Windows PC.
 
+## Phone map
+
+Open **Phone Map** in the side menu, turn it on and scan the code with a phone on the same
+Wi-Fi. The phone shows the live map in its browser, with nothing to install, and can switch
+tools, pick spots, mark cube spots as checked and keep its screen on. It controls only the
+toolkit, never the game.
+
+It's off by default. The link is private but not encrypted, so use it on your home network
+rather than public Wi-Fi. If a firewall blocks the phone, the **Allow phones through the
+firewall** button opens port 8766 to your home network only, using the system's own password
+prompt.
+
 ## Account risk
 
 Nothing is sent to the game and game memory is not touched: the toolkit reads the game's
-incoming network traffic and the pixels of the in-game minimap. Even so, using third-party
+incoming network traffic and the pixels of the in-game minimap. For the ping it also spots the game's
+outgoing ping requests by their size, without reading what's in them. Even so, using third-party
 tools can put your account at risk, and no publisher has approved this one. Read
 [LEGAL.md](LEGAL.md) before you use it.
 

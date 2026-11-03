@@ -24,6 +24,12 @@ public sealed class HubSettings
     public bool Cubes { get; set; }
     public bool Restore { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
+    public bool Phone { get; set; }
+    public bool Ping { get; set; }
+    public int? PingX { get; set; }
+    public int? PingY { get; set; }
+    public bool WindowRules { get; set; }
+    public string PhoneKey { get; set; } = "";
 
     static string File(string folder) => Path.Combine(folder, "hub.json");
 
@@ -55,7 +61,7 @@ public sealed class HubWindow : Window
     const string SteamGame = "steam://rungameid/3393110";
     readonly Border updatePrompt = new() { IsVisible = false, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
     const double NavWidth = 265, DrawerWidth = 1027, DrawerScale = 1.3, MapScale = 1.15;
-    public const string PetsDrawer = "pets", FinderDrawer = "finder", SessionDrawer = "session", MapDrawer = "map", MeterDrawer = "meter", LogDrawer = "log", ResourceDrawer = "resources", ResourceMapDrawer = "resource-map", CubeDrawer = "cubes", CubeMapDrawer = "cube-map", ToolkitDrawer = "toolkit", AboutDrawer = "about";
+    public const string PetsDrawer = "pets", FinderDrawer = "finder", SessionDrawer = "session", MapDrawer = "map", MeterDrawer = "meter", LogDrawer = "log", ResourceDrawer = "resources", ResourceMapDrawer = "resource-map", CubeDrawer = "cubes", CubeMapDrawer = "cube-map", ToolkitDrawer = "toolkit", PhoneDrawer = "phone", AboutDrawer = "about";
 
     static readonly IBrush Ink = Brush.Parse("#05070D");
     static readonly IBrush Bright = Brush.Parse("#E6EDF8");
@@ -70,6 +76,8 @@ public sealed class HubWindow : Window
     readonly PetLayer maps;
     readonly ResourceLayer nodes;
     readonly CubeLayer spots;
+    readonly PhoneBoard phone;
+    readonly MapHub position;
     readonly string folder;
     readonly HubSettings saved;
     readonly Stopwatch session = new();
@@ -77,7 +85,7 @@ public sealed class HubWindow : Window
     readonly Ellipse dot = new() { Width = 13, Height = 13 }, navDot = new() { Width = 12, Height = 12 };
     readonly TextBlock detected = Text("", 15, Green), navDetected = Text("", 14, Bright);
     readonly TextBlock link = Row(""), character = Row(""), uptime = Row(""), status = Text("", 12.5, Soft);
-    readonly Image petsToggle = new(), meterToggle = new(), resourceToggle = new(), cubeToggle = new(), loginToggle = new(), restoreToggle = new();
+    readonly Image petsToggle = new(), meterToggle = new(), resourceToggle = new(), cubeToggle = new(), pingToggle = new(), loginToggle = new(), restoreToggle = new();
     readonly Border launch;
     readonly List<(Func<bool> Running, Control Ready, Control Launched)> cards = new();
     Border popOut = null!;
@@ -90,17 +98,21 @@ public sealed class HubWindow : Window
     MeterWindow? meter;
     ResourceWindow? resources;
     CubeWindow? cubes;
+    PingWindow? ping;
+    CubeAlertWindow? cubeAlert;
     string? opened;
     bool closing;
 
     public HubWindow(AppState app, MapHub position)
     {
         this.app = app;
+        this.position = position;
         maps = new PetLayer(app, position);
         nodes = new ResourceLayer(position, app.Store.Folder);
         spots = new CubeLayer(position, app.Store.Folder);
         folder = Path.GetDirectoryName(app.Store.Folder)!;
         saved = HubSettings.Load(folder);
+        phone = new PhoneBoard(position, maps, nodes, spots, saved.PhoneKey, key => Remember(s => s.PhoneKey = key));
         Title = "Arno's A2 Toolkit";
         Icon = ToolTheme.AppIcon;
         Width = 1152;
@@ -158,11 +170,16 @@ public sealed class HubWindow : Window
         Content = root;
 
         app.Changed += Refresh;
+        app.CubeSeen += CubeAlert;
         clock.Tick += (_, _) => Refresh();
         clock.Start();
         Refresh();
         Opened += (_, _) =>
         {
+            if (saved.Phone)
+                phone.Start();
+            if (spots.Preferences.Alerts)
+                KeepAbove();
             if (saved.Restore && saved.Pets)
                 OpenPets();
             if (saved.Restore && saved.Meter)
@@ -171,6 +188,8 @@ public sealed class HubWindow : Window
                 OpenResources();
             if (saved.Restore && saved.Cubes)
                 OpenCubes();
+            if (saved.Restore && saved.Ping)
+                OpenPing();
         };
         KeyDown += (_, e) =>
         {
@@ -181,11 +200,15 @@ public sealed class HubWindow : Window
         Closed += (_, _) =>
         {
             app.Changed -= Refresh;
+            app.CubeSeen -= CubeAlert;
+            cubeAlert?.Close();
             clock.Stop();
+            phone.Stop();
             pets?.Close();
             meter?.Close();
             resources?.Close();
             cubes?.Close();
+            ping?.Close();
         };
     }
 
@@ -212,6 +235,7 @@ public sealed class HubWindow : Window
         Show(meterToggle, meter != null);
         Show(resourceToggle, resources != null);
         Show(cubeToggle, cubes != null);
+        Show(pingToggle, ping != null);
         Show(loginToggle, Desktop.StartsAtLogin);
         Show(restoreToggle, saved.Restore);
     }
@@ -231,7 +255,8 @@ public sealed class HubWindow : Window
         Place(canvas, Nav("i-cube.png", "Hidden Cube Tracker", CubeDrawer, ToolTheme.Cubes), 10, 500);
         Place(canvas, Nav("i-gear.png", "Toolkit", ToolkitDrawer, ToolTheme.Toolkit), 10, 550);
         Place(canvas, new Border { Width = 216, Height = 1, Background = Rim }, 24, 610);
-        Place(canvas, Nav("i-info.png", "About", AboutDrawer, ToolTheme.Toolkit), 10, 624);
+        Place(canvas, Nav("i-phone.png", "Phone Map", PhoneDrawer, ToolTheme.Toolkit), 10, 624);
+        Place(canvas, Nav("i-info.png", "About", AboutDrawer, ToolTheme.Toolkit), 10, 674);
         Mark();
 
         Place(canvas, Text("v" + Version, 14, Off), 32, 958);
@@ -307,6 +332,7 @@ public sealed class HubWindow : Window
             MeterDrawer => ("DPS Meter Settings", "cdps.png", ToolTheme.Meter, () => new MeterSettingsPanel(app, () => meter?.ApplyOpacity())),
             LogDrawer => ("Fight Log", "cdps.png", ToolTheme.Meter, () => new HistoryPanel(app)),
             ToolkitDrawer => ("Toolkit Settings", "i-gear.png", ToolTheme.Toolkit, () => new ToolkitSettingsPanel(app)),
+            PhoneDrawer => ("Phone Map", "i-phone.png", ToolTheme.Toolkit, () => new PhoneSettings(phone, on => Remember(s => s.Phone = on))),
             _ => ("About", "i-info.png", ToolTheme.Toolkit, () => new AboutPanel(app, Version, saved.CheckUpdates, on => Remember(s => s.CheckUpdates = on)))
         };
         opened = key;
@@ -498,7 +524,7 @@ public sealed class HubWindow : Window
 
     void ToolsOverlay(Canvas canvas)
     {
-        var inside = Panel(canvas, 502, 270, "p-tools.png", "Tools Overlay");
+        var inside = Panel(canvas, 502, 318, "p-tools.png", "Tools Overlay");
         Switch(inside, 62, "Pet Tracker", petsToggle, () =>
         {
             if (pets == null)
@@ -527,11 +553,18 @@ public sealed class HubWindow : Window
             else
                 cubes.Close();
         }, true);
+        Switch(inside, 254, "Server Ping", pingToggle, () =>
+        {
+            if (ping == null)
+                OpenPing();
+            else
+                ping.Close();
+        }, true);
     }
 
     void ToolkitPanel(Canvas canvas)
     {
-        var inside = Panel(canvas, 784, 175, "i-gear.png", "Toolkit");
+        var inside = Panel(canvas, 832, 175, "i-gear.png", "Toolkit");
         status.Width = 200;
         status.TextWrapping = TextWrapping.Wrap;
         Place(inside, status, 20, 56);
@@ -787,6 +820,73 @@ public sealed class HubWindow : Window
         }
 
         cubes.Activate();
+    }
+
+    public void OpenPing()
+    {
+        if (ping == null)
+        {
+            ping = new PingWindow(app, saved.PingX, saved.PingY, (x, y) => Remember(s => (s.PingX, s.PingY) = (x, y)));
+            ping.Closed += (_, _) =>
+            {
+                ping = null;
+                Remember(s => s.Ping = false);
+                Refresh();
+            };
+            ping.Show();
+            KeepAbove();
+            Remember(s => s.Ping = true);
+            Refresh();
+        }
+    }
+
+    /// <summary>What an alert says: where the cube is and how far from you, when that's known.</summary>
+    public static string CubeText(string area, double? metres) => "Hidden Cube: " + area + (metres is double m ? $", {Math.Round(m).ToString("0", System.Globalization.CultureInfo.InvariantCulture)} m away" : "");
+
+    void CubeAlert(CubeSighting cube)
+    {
+        if (!spots.Preferences.Alerts)
+            return;
+        double? metres = null;
+        if (position.Region == cube.Region && position.Player is { } player)
+        {
+            var (x, y) = position.Map.Normalize(cube.X, cube.Y);
+            metres = Math.Sqrt(Math.Pow(x - player.X, 2) + Math.Pow(y - player.Y, 2)) * position.Map.Metres;
+        }
+
+        string text = CubeText(cube.Area, metres);
+        cubeAlert?.Close();
+        cubeAlert = new CubeAlertWindow(text);
+        var shown = cubeAlert;
+        shown.Closed += (_, _) =>
+        {
+            if (cubeAlert == shown)
+                cubeAlert = null;
+        };
+        shown.Show();
+        phone.Alert(text);
+        Desktop.Chime();
+    }
+
+    // On KDE a fullscreen game covers "always on top" windows without the window rules. Asked
+    // for once, so someone who removes them isn't overruled at every start.
+    void KeepAbove()
+    {
+        if (!KdeWindowRules.Available || saved.WindowRules)
+            return;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                if (!KdeWindowRules.Installed())
+                    KdeWindowRules.Install();
+                Dispatcher.UIThread.Post(() => Remember(s => s.WindowRules = true));
+            }
+            catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                // Toolkit Settings has the button, and says what went wrong
+            }
+        });
     }
 
     public void OpenResources()

@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05070d">
+<meta name="referrer" content="no-referrer">
+<title>A2 Map</title>
+<style>
+  :root { color-scheme: dark; --ink: #05070d; --panel: #0a111dee; --rim: #1f3350; --bright: #e6edf8; --soft: #aebbcf; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--ink); color: var(--bright); font: 14px/1.3 system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  #map { flex: 1; min-height: 0; width: 100%; display: block; touch-action: none; }
+  header, footer { background: var(--panel); padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left)); }
+  header { padding-top: max(8px, env(safe-area-inset-top)); border-bottom: 1px solid var(--rim); }
+  footer { padding-bottom: max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--rim); }
+  .row { display: flex; gap: 6px; }
+  button { flex: 1; min-width: 0; min-height: 44px; padding: 4px; color: var(--bright); background: #0c1626; border: 1px solid var(--rim); border-radius: 8px; font: inherit; font-weight: 600; }
+  button:active { filter: brightness(1.4); }
+  button:disabled { opacity: .4; }
+  .tool[aria-pressed=true] { border-color: var(--tint); color: var(--ink); background: var(--tint); }
+  #awake[aria-pressed=true] { border-color: #f2b632; color: #f2b632; }
+  #turn[aria-pressed=true], #centre[aria-pressed=true] { border-color: #4fc3f7; color: #4fc3f7; }
+  #guide { margin-top: 6px; min-height: 18px; color: var(--soft); font-size: 13px; }
+  #guide div { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #banner { position: fixed; left: 8px; right: 8px; top: calc(112px + env(safe-area-inset-top)); padding: 10px; border-radius: 8px; background: #3a2506; border: 1px solid #f2b632; text-align: center; }
+  #banner[hidden] { display: none; }
+  video { position: fixed; width: 1px; height: 1px; opacity: .01; pointer-events: none; }
+</style>
+</head>
+<body>
+<header>
+  <div class="row" id="tools"></div>
+  <div id="guide" aria-live="polite"></div>
+</header>
+<canvas id="map"></canvas>
+<div id="banner" role="alert" hidden></div>
+<footer>
+  <div class="row">
+    <button id="out" aria-label="Zoom out">−</button>
+    <button id="in" aria-label="Zoom in">+</button>
+    <button id="centre" aria-label="Centre on me" aria-pressed="true">◎</button>
+    <button id="turn" aria-label="Turn map with the camera" aria-pressed="false">N</button>
+    <button id="next" aria-label="Next spot">⟳</button>
+    <button id="check" aria-label="Mark this cube spot checked">✓</button>
+    <button id="awake" aria-label="Keep the screen on" aria-pressed="false">☀</button>
+  </div>
+</footer>
+<script>
+"use strict";
+const key = new URLSearchParams(location.search).get("k") || "";
+const link = (path, extra) => `${path}?k=${encodeURIComponent(key)}${extra ? "&" + extra : ""}`;
+const $ = id => document.getElementById(id);
+const canvas = $("map"), context = canvas.getContext("2d");
+
+function remembered(name, fallback) {
+  try { const value = JSON.parse(localStorage.getItem("a2-" + name)); return value === null ? fallback : value; }
+  catch { return fallback; }
+}
+function remember(name, value) {
+  try { localStorage.setItem("a2-" + name, JSON.stringify(value)); } catch { }
+}
+
+let state = null, shown = null, heading = null;
+let zoom = remembered("zoom", 3), turning = remembered("turn", false), follow = true;
+const chosen = new Set(remembered("layers", ["pets", "nodes", "cubes"]));
+let center = [0.5, 0.5];
+const dots = {}, revisions = {}, tiles = new Map();
+
+const shapes = (() => {
+  const round = (x, y, r) => `M${x + r} ${y}A${r} ${r} 0 1 0 ${x - r} ${y}A${r} ${r} 0 1 0 ${x + r} ${y}Z`;
+  return {
+    Dot: new Path2D(round(0, 0, .8)),
+    Diamond: new Path2D("M0-1L.72 0L0 1L-.72 0Z"),
+    Square: new Path2D("M-.72-.72H.72V.72H-.72Z"),
+    Triangle: new Path2D("M0-1L.9.8H-.9Z"),
+    Cube: new Path2D("M0-1L.87-.5V.5L0 1L-.87.5V-.5ZM-.87-.5L0 0L.87-.5M0 0V1"),
+    Paw: new Path2D(round(0, .34, .55) + round(-.72, -.1, .25) + round(-.28, -.62, .27) + round(.28, -.62, .27) + round(.72, -.1, .25)),
+    Leaf: new Path2D("M-.8.8Q-.9-.8.9-.9Q.8.9-.8.8Z"),
+    Drop: new Path2D("M0-1Q.72-.25.72.28A.72.72 0 0 1-.72.28Q-.72-.25 0-1Z"),
+    Fan: new Path2D("M0 .85L-.95-.2A.95.95 0 0 1 .95-.2Z")
+  };
+})();
+
+const pixels = () => zoom * 256 * state.grid;
+const turned = () => turning && heading !== null ? heading : 0;
+const size = () => ({ w: canvas.clientWidth, h: canvas.clientHeight });
+
+function rotate(x, y, degrees) {
+  const a = degrees * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  return [x * c - y * s, x * s + y * c];
+}
+function toScreen(x, y) {
+  const { w, h } = size(), [a, b] = rotate((x - center[0]) * pixels(), (y - center[1]) * pixels(), -turned());
+  return [w / 2 + a, h / 2 + b];
+}
+function toRegion(px, py) {
+  const { w, h } = size(), [a, b] = rotate(px - w / 2, py - h / 2, turned());
+  return [center[0] + a / pixels(), center[1] + b / pixels()];
+}
+
+function tile(column, row) {
+  const id = `${state.region}/${column}_${row}`;
+  if (!tiles.has(id)) {
+    const image = new Image();
+    image.src = link("/tile", `region=${state.region}&c=${column}&r=${row}`);
+    tiles.set(id, image);
+  }
+  return tiles.get(id);
+}
+
+function marker(shape, x, y, radius, fill, edge) {
+  context.save();
+  context.translate(x, y);
+  context.scale(radius, radius);
+  context.fillStyle = fill;
+  context.strokeStyle = edge;
+  context.lineWidth = 1.1 / radius;
+  context.fill(shapes[shape] || shapes.Dot);
+  context.stroke(shapes[shape] || shapes.Dot);
+  context.restore();
+}
+
+function label(text, x, y, fill) {
+  context.font = "bold 13px system-ui, sans-serif";
+  const width = context.measureText(text).width + 8;
+  context.fillStyle = fill;
+  context.beginPath();
+  context.roundRect(x - width / 2, y - 9, width, 18, 4);
+  context.fill();
+  context.fillStyle = "#000";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, x, y + 1);
+}
+
+let painted = 0;
+function draw(now) {
+  requestAnimationFrame(draw);
+  // Thirty frames a second are plenty for a map, and easier on the phone's battery.
+  if (!state || now - painted < 32) return;
+  painted = now;
+  const { w, h } = size(), ratio = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(w * ratio) || canvas.height !== Math.round(h * ratio)) {
+    canvas.width = Math.round(w * ratio);
+    canvas.height = Math.round(h * ratio);
+  }
+  if (state.player) {
+    shown = shown && Math.abs(shown[0] - state.player[0]) + Math.abs(shown[1] - state.player[1]) < 0.01
+      ? [shown[0] + (state.player[0] - shown[0]) * .2, shown[1] + (state.player[1] - shown[1]) * .2]
+      : state.player.slice();
+    if (follow) center = shown.slice();
+  } else shown = null;
+
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.fillStyle = state.background;
+  context.fillRect(0, 0, w, h);
+  context.save();
+  context.translate(w / 2, h / 2);
+  context.rotate(-turned() * Math.PI / 180);
+  const cell = pixels() / state.grid, reach = Math.hypot(w, h) / 2;
+  for (const [column, row] of state.tiles) {
+    const x = (column / state.grid - center[0]) * pixels(), y = (row / state.grid - center[1]) * pixels();
+    if (x > reach || y > reach || x + cell < -reach || y + cell < -reach) continue;
+    const image = tile(column, row);
+    if (image.complete && image.naturalWidth) context.drawImage(image, x, y, cell + 1, cell + 1);
+  }
+  context.restore();
+
+  const active = state.layers.filter(l => chosen.has(l.id)), radius = Math.min(Math.max(zoom * 2, 4), 8);
+  for (const layer of active)
+    for (const [x, y, color, shape, learned] of dots[layer.id] || []) {
+      const [sx, sy] = toScreen(x, y);
+      if (sx > -8 && sy > -8 && sx < w + 8 && sy < h + 8) marker(shape, sx, sy, radius, color, learned ? "#fff" : "#000a");
+    }
+
+  const ring = state.radius * pixels();
+  for (const layer of active)
+    for (let i = layer.spots.length - 1; i >= 0; i--) {
+      const [sx, sy] = toScreen(...layer.spots[i]), target = i === layer.target;
+      context.beginPath();
+      context.arc(sx, sy, Math.max(ring, 9), 0, 7);
+      context.globalAlpha = target ? .2 : .09;
+      context.fillStyle = layer.spot;
+      context.fill();
+      context.globalAlpha = 1;
+      context.lineWidth = target ? 3 : 2;
+      context.strokeStyle = layer.spot;
+      context.stroke();
+      label(String(i + 1), sx, sy, layer.spot);
+    }
+
+  if (chosen.has("pets"))
+    for (const [x, y, wanted, color] of state.mobs) {
+      const [sx, sy] = toScreen(x, y);
+      context.beginPath();
+      context.arc(sx, sy, wanted ? 6 : 4, 0, 7);
+      context.fillStyle = color;
+      context.fill();
+      context.lineWidth = wanted ? 2 : 1;
+      context.strokeStyle = wanted ? "#fff" : "#000";
+      context.stroke();
+    }
+
+  if (shown) {
+    const [px, py] = toScreen(...shown);
+    for (const layer of active)
+      if (layer.goal && layer.spots[layer.target]) {
+        const [gx, gy] = toScreen(...layer.spots[layer.target]);
+        context.setLineDash([7, 5]);
+        context.lineWidth = 2.5;
+        context.strokeStyle = layer.spot;
+        context.beginPath();
+        context.moveTo(px, py);
+        context.lineTo(gx, gy);
+        context.stroke();
+        context.setLineDash([]);
+      }
+    if (!state.precise) {
+      context.beginPath();
+      context.arc(px, py, Math.max(10 / state.metres * pixels(), 12), 0, 7);
+      context.fillStyle = "#4fc3f722";
+      context.fill();
+    }
+    context.beginPath();
+    context.arc(px, py, 14, 0, 7);
+    context.fillStyle = "#4fc3f755";
+    context.fill();
+    if (heading !== null) {
+      context.save();
+      context.translate(px, py);
+      context.rotate((heading - turned()) * Math.PI / 180);
+      const arrow = new Path2D("M0-12L8.5 8L0 3.5L-8.5 8Z");
+      context.lineJoin = "round";
+      context.lineWidth = 4.5;
+      context.strokeStyle = "#0b1118";
+      context.stroke(arrow);
+      context.fillStyle = "#4fc3f7";
+      context.fill(arrow);
+      context.lineWidth = 2;
+      context.strokeStyle = "#fff";
+      context.stroke(arrow);
+      context.restore();
+    } else {
+      context.beginPath();
+      context.arc(px, py, 7, 0, 7);
+      context.fillStyle = "#fff";
+      context.fill();
+      context.lineWidth = 3.5;
+      context.strokeStyle = "#4fc3f7";
+      context.stroke();
+    }
+  }
+}
+
+function buildTools() {
+  const row = $("tools");
+  for (const layer of state.layers) {
+    const button = document.createElement("button");
+    button.className = "tool";
+    button.textContent = layer.name;
+    button.style.setProperty("--tint", layer.color);
+    button.setAttribute("aria-pressed", chosen.has(layer.id));
+    button.onclick = () => {
+      if (chosen.has(layer.id)) chosen.delete(layer.id); else chosen.add(layer.id);
+      button.setAttribute("aria-pressed", chosen.has(layer.id));
+      remember("layers", [...chosen]);
+      showGuide();
+    };
+    row.append(button);
+  }
+}
+
+function showGuide() {
+  const active = state.layers.filter(l => chosen.has(l.id));
+  const guide = $("guide");
+  guide.textContent = "";
+  for (const layer of active) {
+    const part = document.createElement("div");
+    part.style.color = layer.spot;
+    part.textContent = layer.guidance;
+    guide.append(part);
+  }
+  $("next").disabled = !active.some(l => l.spots.length > 1);
+  $("check").disabled = !chosen.has("cubes") || !state.layers.some(l => l.id === "cubes" && l.spots.length);
+}
+
+let alerted = 0;
+
+function banner(text) {
+  $("banner").hidden = !text;
+  $("banner").textContent = text || "";
+}
+
+async function poll() {
+  try {
+    const reply = await fetch(link("/state"), { cache: "no-store" });
+    if (reply.status === 403) {
+      banner("This link is out of date. Scan the code in the toolkit again.");
+      return;
+    }
+    if (!reply.ok) throw new Error();
+    const next = await reply.json(), first = !state, moved = state && state.region !== next.region;
+    if (moved) { follow = true; shown = null; }
+    state = next;
+    heading = next.heading ?? null;
+    if (first) buildTools();
+    for (const layer of next.layers)
+      if (revisions[layer.id] !== layer.revision || moved) {
+        const asked = await fetch(link("/dots", `layer=${layer.id}`), { cache: "no-store" });
+        if (asked.ok) { dots[layer.id] = await asked.json(); revisions[layer.id] = layer.revision; }
+      }
+    if (next.alert && next.alert.id !== alerted) {
+      alerted = next.alert.id;
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+    }
+    banner(next.alert ? next.alert.text : next.problem);
+    showGuide();
+    showButtons();
+  } catch {
+    banner("Can't reach the toolkit. Check it's running and that this phone is on the same Wi-Fi.");
+  }
+  setTimeout(poll, document.hidden ? 2000 : 400);
+}
+
+function send(action, layer, extra) {
+  fetch(link("/do", `a=${action}${layer ? "&layer=" + layer : ""}${extra ? "&" + extra : ""}`), { method: "POST" }).catch(() => { });
+}
+
+function showButtons() {
+  $("centre").setAttribute("aria-pressed", follow);
+  $("turn").textContent = turning ? "↻" : "N";
+  $("turn").setAttribute("aria-pressed", turning);
+}
+
+function zoomBy(factor, anchor) {
+  if (!state) return;
+  const { w, h } = size(), point = anchor || [w / 2, h / 2], before = toRegion(...point);
+  zoom = Math.min(Math.max(zoom * factor, .15), 24);
+  if (!follow) {
+    const after = toRegion(...point);
+    center = [center[0] + before[0] - after[0], center[1] + before[1] - after[1]];
+  }
+  remember("zoom", zoom);
+}
+
+$("out").onclick = () => zoomBy(.8);
+$("in").onclick = () => zoomBy(1.25);
+$("centre").onclick = () => { follow = true; showButtons(); };
+$("turn").onclick = () => { turning = !turning; remember("turn", turning); showButtons(); };
+$("next").onclick = () => { for (const layer of state.layers) if (chosen.has(layer.id) && layer.spots.length) send("next", layer.id); };
+$("check").onclick = () => send("check");
+
+// Fingers on the map: one drags, two pinch, a quick tap picks a numbered spot, a double tap recentres.
+const fingers = new Map();
+let pinch = 0, travelled = 0, lastTap = 0;
+const place = e => { const box = canvas.getBoundingClientRect(); return [e.clientX - box.left, e.clientY - box.top]; };
+
+canvas.addEventListener("pointerdown", e => {
+  canvas.setPointerCapture(e.pointerId);
+  fingers.set(e.pointerId, place(e));
+  travelled = 0;
+  pinch = 0;
+});
+canvas.addEventListener("pointermove", e => {
+  const before = fingers.get(e.pointerId);
+  if (!before || !state) return;
+  const now = place(e);
+  fingers.set(e.pointerId, now);
+  travelled += Math.hypot(now[0] - before[0], now[1] - before[1]);
+  if (fingers.size === 2) {
+    const [a, b] = [...fingers.values()], span = Math.hypot(a[0] - b[0], a[1] - b[1]);
+    if (pinch) zoomBy(span / pinch, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+    pinch = span;
+  } else if (fingers.size === 1 && travelled > 6) {
+    const from = toRegion(...before), to = toRegion(...now);
+    center = [center[0] + from[0] - to[0], center[1] + from[1] - to[1]];
+    follow = false;
+    showButtons();
+  }
+});
+function lift(e) {
+  const tapped = fingers.size === 1 && travelled <= 6 && fingers.has(e.pointerId);
+  const at = fingers.get(e.pointerId);
+  fingers.delete(e.pointerId);
+  pinch = 0;
+  if (!tapped || !state) return;
+  if (e.timeStamp - lastTap < 300) { follow = true; showButtons(); }
+  lastTap = e.timeStamp;
+  for (const layer of state.layers.filter(l => chosen.has(l.id)))
+    for (const [i, spot] of layer.spots.entries()) {
+      const [sx, sy] = toScreen(...spot);
+      if (Math.hypot(sx - at[0], sy - at[1]) <= Math.max(state.radius * pixels(), 18)) { send("target", layer.id, "i=" + i); return; }
+    }
+}
+canvas.addEventListener("pointerup", lift);
+canvas.addEventListener("pointercancel", e => { fingers.delete(e.pointerId); pinch = 0; });
+canvas.addEventListener("wheel", e => { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.25 : .8, place(e)); }, { passive: false });
+
+// Keep the screen on: the wake lock on secure pages, otherwise a silent looping video, which
+// also has to be started by a tap. Both stop when the page is hidden.
+let wanted = false, lock = null, video = null;
+async function stayAwake() {
+  if (navigator.wakeLock) {
+    try {
+      lock = await navigator.wakeLock.request("screen");
+      lock.addEventListener("release", () => { lock = null; });
+      return true;
+    } catch { }
+  }
+  if (!video) {
+    video = document.createElement("video");
+    video.src = link("/keep-awake.mp4");
+    video.loop = video.muted = video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    document.body.append(video);
+  }
+  try { await video.play(); return true; } catch { return false; }
+}
+$("awake").onclick = async () => {
+  wanted = !wanted;
+  if (wanted) wanted = await stayAwake();
+  else { if (lock) lock.release(); if (video) video.pause(); }
+  $("awake").setAttribute("aria-pressed", wanted);
+};
+document.addEventListener("visibilitychange", () => {
+  if (wanted && !document.hidden) stayAwake();
+});
+
+poll();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

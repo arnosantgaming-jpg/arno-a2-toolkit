@@ -70,6 +70,8 @@ public sealed class Engine
     public event Action<Notice>? Noticed;
     /// <summary>Every message decoded from the game connection, in order (for the live map).</summary>
     public event Action<Message, DateTimeOffset>? Decoded;
+    /// <summary>Every frame, decoded or not.</summary>
+    public event Action<Frame, DateTimeOffset>? Framed;
 
     public Connection Connection => flow == null ? Connection.Waiting : LocalEntity == null ? Connection.Identifying : Collection.Synced ? Connection.Live : Connection.Unsynced;
 
@@ -124,6 +126,7 @@ public sealed class Engine
 
     void Frame(uint id, Frame frame)
     {
+        Framed?.Invoke(frame, clock);
         var message = MessageDecoder.Decode(frame, data.IsPet, clock);
         if (message == null)
             return;

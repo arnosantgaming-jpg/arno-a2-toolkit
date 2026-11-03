@@ -188,4 +188,17 @@ List<Frame> Split(params byte[][] chunks)
     Check(Decode(0x91, 0x56, shop) == null, "merchant with inconsistent price rejected");
 }
 
+// The cube watch: finds a cube spot's position in any frame, at any offset.
+{
+    var cubes = new ArnoA2.Replay.CubeSpots(new[] { (12000.0, 34000.0, "Test Area") });
+    var body = new byte[32];
+    BitConverter.TryWriteBytes(body.AsSpan(11), 12100f);
+    BitConverter.TryWriteBytes(body.AsSpan(15), 34050f);
+    var found = cubes.Scan(body).ToArray();
+    Check(found.Length == 1 && found[0].Offset == 11 && found[0].Area == "Test Area" && Math.Abs(found[0].Metres - 1.118) < 0.01, "a position on a cube spot is found in a frame");
+    Check(cubes.Near(12000, 34400) == null, "4 m from a spot is not on it");
+    Check(!cubes.Scan(new byte[64]).Any(), "an empty frame holds no cube spot");
+    Check(ArnoA2.Replay.CubeSpots.Load("data/CubeSpots.json").Count == 2811, "the real cube data loads");
+}
+
 Console.WriteLine($"{checks} protocol checks passed.");

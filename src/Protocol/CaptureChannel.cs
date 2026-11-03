@@ -14,20 +14,23 @@ public enum ChannelKind : byte
     Gap = 3,
     FlowClosed = 4,
     /// <summary>Daemon state; payload is UTF-8 "state|message|flows|segments|dropped".</summary>
-    Status = 5
+    Status = 5,
+    /// <summary>The game's own ping; payload is i32 milliseconds.</summary>
+    Ping = 6
 }
 
 public sealed record ChannelMessage(ChannelKind Kind, uint Flow, byte[] Payload)
 {
     public string Text => Encoding.UTF8.GetString(Payload);
     public long LostBytes => BinaryPrimitives.ReadInt64LittleEndian(Payload);
+    public int Milliseconds => BinaryPrimitives.ReadInt32LittleEndian(Payload);
 }
 
 /// <summary>
 /// The capture daemon's link to the app: a Unix stream socket (Windows has them too) in the
 /// user's runtime directory (mode 0700) or temp folder, carrying length-prefixed records
 /// kind:u8 flow:u32 length:u32 payload. Only the server→client direction of game
-/// connections is ever sent.
+/// connections is ever sent; of the other direction, only how long the game's ping took.
 /// </summary>
 public static class CaptureChannel
 {
@@ -65,7 +68,7 @@ public static class CaptureChannel
         if (!await Fill(stream, header, cancel))
             return null;
         int length = BinaryPrimitives.ReadInt32LittleEndian(header.AsSpan(5));
-        if (length is < 0 or > MaxPayload || header[0] is < 1 or > 5)
+        if (length is < 0 or > MaxPayload || header[0] is < 1 or > 6)
             throw new InvalidDataException("Malformed capture channel record");
         var payload = new byte[length];
         if (!await Fill(stream, payload, cancel))

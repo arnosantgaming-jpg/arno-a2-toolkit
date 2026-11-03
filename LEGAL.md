@@ -9,8 +9,8 @@ AION 2 identify the game it is meant to work with.
 
 ## Game rules and account risk
 
-The toolkit observes the game's incoming network traffic locally, and can read the
-pixels of the in-game minimap, to display pet, combat and map information. On Windows
+The toolkit observes the game's incoming network traffic locally, spots its outgoing ping
+requests by their size without reading their contents, and can read the pixels of the in-game minimap, to display pet, combat and map information. On Windows
 it reads that corner of the screen, and capture relies on Npcap, which the user installs.
 It does not read or change game memory, send anything to the game, or automate combat,
 movement or farming. That does not establish permission to use it under the game's

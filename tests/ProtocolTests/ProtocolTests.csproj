@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Protocol/Protocol.csproj" />
+    <Compile Include="../../tools/Replay/CubeSpots.cs" Link="CubeSpots.cs" />
   </ItemGroup>
 </Project>

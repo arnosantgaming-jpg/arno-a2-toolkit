@@ -12,6 +12,7 @@
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="QRCoder" Version="1.8.1" />
     <ProjectReference Include="../Modules/Pets/Tracker.csproj" />
     <ProjectReference Include="../Modules/Meter/Meter.csproj" />
   </ItemGroup>
@@ -19,6 +20,8 @@
     <EmbeddedResource Include="../../data/FarmingSpawns.json" LogicalName="spawns.json" />
     <EmbeddedResource Include="../../data/ResourceNodes.json" LogicalName="resources.json" />
     <EmbeddedResource Include="../../data/CubeSpots.json" LogicalName="cubes.json" />
+    <EmbeddedResource Include="Phone/phone.html" LogicalName="phone.html" />
+    <EmbeddedResource Include="Phone/keep-awake.mp4" LogicalName="keep-awake.mp4" />
     <Content Include="../../assets/classes/*.png" Link="classes/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/portraits/*.png" Link="portraits/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/crystals/*.png" Link="crystals/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

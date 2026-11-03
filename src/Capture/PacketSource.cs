@@ -4,8 +4,8 @@ using System.Runtime.InteropServices;
 
 namespace ArnoA2.Capture;
 
-/// <summary>An incoming TCP segment with payload (or a SYN), as captured.</summary>
-public readonly record struct Segment(DateTimeOffset Time, IPAddress Source, int SourcePort, IPAddress Destination, int DestinationPort, uint Sequence, bool Syn, bool Fin, bool Reset, ReadOnlyMemory<byte> Payload);
+/// <summary>A TCP segment as captured. Of outgoing ones, only frame sizes are ever looked at.</summary>
+public readonly record struct Segment(DateTimeOffset Time, IPAddress Source, int SourcePort, IPAddress Destination, int DestinationPort, uint Sequence, bool Syn, bool Fin, bool Reset, ReadOnlyMemory<byte> Payload, bool Outgoing = false);
 
 /// <summary>
 /// Minimal pcap binding, libpcap on Linux and Npcap's wpcap.dll on Windows: live capture on
@@ -107,17 +107,7 @@ public sealed class PacketSource : IPacketSource
         }
     }
 
-    public void FilterInbound(string expression)
-    {
-        try
-        {
-            Filter("inbound and " + expression);
-        }
-        catch (IOException)
-        {
-            Filter(expression); // capture files without direction information
-        }
-    }
+    public void FilterOwn(string expression) => Filter(expression);
 
     /// <summary>Next TCP segment, null on read timeout. Throws at end of file or error.</summary>
     public Segment? Next(out bool end)
@@ -195,8 +185,10 @@ public sealed class PacketSource : IPacketSource
         if (tcpHeader < 20 || tcpHeader > tcp.Length)
             return null;
         byte flags = tcp[13];
+        // Linux "any" captures say which way a packet went: 4 is PACKET_OUTGOING.
+        bool outgoing = link == 113 ? BinaryPrimitives.ReadUInt16BigEndian(packet) == 4 : link == 276 && packet[10] == 4;
         var payload = packet.AsMemory(at + ipHeader + tcpHeader, total - ipHeader - tcpHeader);
-        return new(time, source, BinaryPrimitives.ReadUInt16BigEndian(tcp), destination, BinaryPrimitives.ReadUInt16BigEndian(tcp[2..]), BinaryPrimitives.ReadUInt32BigEndian(tcp[4..]), (flags & 0x02) != 0, (flags & 0x01) != 0, (flags & 0x04) != 0, payload);
+        return new(time, source, BinaryPrimitives.ReadUInt16BigEndian(tcp), destination, BinaryPrimitives.ReadUInt16BigEndian(tcp[2..]), BinaryPrimitives.ReadUInt32BigEndian(tcp[4..]), (flags & 0x02) != 0, (flags & 0x01) != 0, (flags & 0x04) != 0, payload, outgoing);
     }
 
     public void Dispose()

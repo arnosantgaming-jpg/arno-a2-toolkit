@@ -105,7 +105,68 @@ string Text(List<StreamEvent> events) => string.Concat(events.Select(e => e is S
     BitConverter.TryWriteBytes(six.AsSpan(4 + 52), 42);
     var mapped = WindowsGameConnections.ParseV6(six, game).Single();
     Check(mapped == new Connection(IPAddress.Parse("10.0.0.10"), 50000, IPAddress.Parse("193.202.112.199"), 13328), "IPv4-mapped rows come out as the same connection a packet shows");
-    Check(NpcapCapture.ReceivedBy(new[] { IPAddress.Parse("10.0.0.10"), IPAddress.Parse("2001:db8::1") }, "tcp") == "tcp and (dst host 10.0.0.10 or dst host 2001:db8::1)", "adapter filter keeps packets sent to its own addresses");
+    Check(NpcapCapture.OwnedBy(new[] { IPAddress.Parse("10.0.0.10"), IPAddress.Parse("2001:db8::1") }, "tcp") == "tcp and (host 10.0.0.10 or host 2001:db8::1)", "adapter filter keeps packets to and from its own addresses");
+}
+
+// --- Ping -------------------------------------------------------------------------
+{
+    byte[] Request() => new byte[] { 0x10 }.Concat(Enumerable.Repeat((byte)0xAB, 12)).ToArray();
+    byte[] Reply(long sent)
+    {
+        var p = new byte[] { 0x18, 0x03, 0x36, 0x00, 0x00 }.Concat(new byte[16]).ToArray();
+        BitConverter.TryWriteBytes(p.AsSpan(5), sent);
+        return p;
+    }
+
+    const long Now = 1_790_000_000_000, Clock = 16_823_782_918;
+    var ping = new GamePing();
+    Check(ping.Received(Reply(Clock), Now) == null, "a reply with no request and an unknown clock gives nothing");
+    ping = new GamePing();
+    ping.Sent(Request(), Now);
+    Check(ping.Received(B("no ping in here at all"), Now + 10) == null, "other traffic is not a ping");
+    Check(ping.Received(Reply(Clock), Now + 64) == 64, "the reply is timed against its request");
+    ping.Sent(Request(), Now + 10_000);
+    Check(ping.Received(Reply(Clock + 10_000), Now + 10_090) == 90, "later pings on the same clock");
+    Check(ping.Received(Reply(Clock + 20_000), Now + 20_045) == 45, "a reply whose request was missed still reads, once the clock is known");
+    ping.Sent(Request(), Now + 30_000);
+    ping.Sent(Request(), Now + 30_020);
+    Check(ping.Received(Reply(Clock + 30_000), Now + 30_070) == 70, "a stray request is told apart by the clock");
+    var jumped = new GamePing();
+    for (int n = 0; n < 2; n++)
+    {
+        jumped.Sent(Request(), Now + n * 10_000);
+        jumped.Received(Reply(Clock + n * 10_000), Now + n * 10_000 + 60);
+    }
+
+    jumped.Sent(Request(), Now + 22_320);
+    Check(jumped.Received(Reply(Clock + 20_000), Now + 22_390) == 70, "a clock jump follows the request");
+    Check(jumped.Received(Reply(Clock + 30_000), Now + 32_375) == null, "a jumped clock is not trusted without a request");
+    var wall = new GamePing();
+    Check(wall.Received(Reply(Now + 62135596800000), Now + 80) == 80, "a real-time stamp needs no request");
+    Check(GamePing.IsRequest(Request()) && !GamePing.IsRequest(new byte[] { 0x10 }) && !GamePing.IsRequest(new byte[200]), "requests are known by their frame size");
+    Check(GamePing.IsRequest(new byte[] { 0x05, 0x23, 0x0C, 0x0F, 1, 2 }), "a relayed request is known by its header");
+
+    byte[] Packet(int type, int srcPort, int dstPort, uint seq, int length)
+    {
+        var p = new byte[20 + 20 + 20 + length];
+        p[10] = (byte)type;
+        p[20] = 0x45;
+        p[22] = (byte)((40 + length) >> 8);
+        p[23] = (byte)(40 + length);
+        p[29] = 6;
+        var tcp = p.AsSpan(40);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(tcp, (ushort)srcPort);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(tcp[2..], (ushort)dstPort);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(tcp[4..], seq);
+        tcp[12] = 0x50;
+        tcp[13] = 0x10;
+        return p;
+    }
+
+    var outgoing = PacketSource.Parse(t0, Packet(4, 50000, 13328, 7, 5), 276)!.Value;
+    Check(outgoing.Outgoing && outgoing.Sequence == 7 && outgoing.Payload.Length == 5, "Linux capture marks outgoing packets");
+    var incoming = PacketSource.Parse(t0, Packet(0, 13328, 50000, 9, 0), 276)!.Value;
+    Check(!incoming.Outgoing, "incoming packets are not marked");
 }
 
 // --- End to end -------------------------------------------------------------------

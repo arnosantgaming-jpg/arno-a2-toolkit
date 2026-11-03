@@ -10,6 +10,8 @@ public sealed class CubePreferences : ToolWindowLook
     public bool ShowChecked { get; set; } = true;
     /// <summary>How long a checked spot stays out of the ranking.</summary>
     public int CheckedMinutes { get; set; } = 30;
+    /// <summary>A sound, a note on screen and on the phone when a cube appears.</summary>
+    public bool Alerts { get; set; } = true;
 }
 
 /// <summary>The Hidden Cube Tracker's maps: every place a cube can appear, as red cubes, with

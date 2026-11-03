@@ -26,8 +26,8 @@ static class Npcap
 
 /// <summary>
 /// Windows has no "any" device, so each network adapter gets its own capture and reading
-/// thread, and their packets meet in one queue. Npcap can't filter on direction either:
-/// "received" is packets addressed to the adapter's own addresses.
+/// thread, and their packets meet in one queue. Npcap can't tell direction either: a packet
+/// is outgoing when it comes from one of the adapter's own addresses.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class NpcapCapture : IPacketSource
@@ -118,28 +118,28 @@ public sealed class NpcapCapture : IPacketSource
         return found.Where(a => !a.IsIPv6LinkLocal).ToArray();
     }
 
-    /// <summary>The "dst host" filter for an adapter's addresses.</summary>
-    public static string ReceivedBy(IEnumerable<IPAddress> addresses, string expression) => $"{expression} and ({string.Join(" or ", addresses.Select(a => "dst host " + a))})";
+    /// <summary>The "host" filter for an adapter's addresses.</summary>
+    public static string OwnedBy(IEnumerable<IPAddress> addresses, string expression) => $"{expression} and ({string.Join(" or ", addresses.Select(a => "host " + a))})";
 
-    public void FilterInbound(string expression)
+    public void FilterOwn(string expression)
     {
         foreach (var (source, addresses) in adapters)
-            source.Filter(ReceivedBy(addresses, expression));
-        foreach (var (source, _) in adapters)
+            source.Filter(OwnedBy(addresses, expression));
+        foreach (var (source, addresses) in adapters)
         {
-            var reader = new Thread(() => Read(source)) { IsBackground = true, Name = "adapter reader" };
+            var reader = new Thread(() => Read(source, addresses)) { IsBackground = true, Name = "adapter reader" };
             readers.Add(reader);
             reader.Start();
         }
     }
 
-    void Read(PacketSource source)
+    void Read(PacketSource source, IPAddress[] addresses)
     {
         try
         {
             while (!stopping)
                 if (source.Next(out _) is { } segment)
-                    queue.TryAdd(segment); // a full queue counts as packet loss; the stream repairs it as a gap
+                    queue.TryAdd(segment with { Outgoing = addresses.Contains(segment.Source) }); // a full queue counts as packet loss; the stream repairs it as a gap
         }
         catch (IOException)
         {

@@ -52,6 +52,7 @@ sealed class Daemon(Options options)
         public uint Id { get; } = id;
         public Connection Connection { get; } = connection;
         public StreamAssembler Assembler { get; } = new();
+        public GamePing Ping { get; } = new();
         public DateTimeOffset LastSeen { get; set; }
     }
 
@@ -59,8 +60,8 @@ sealed class Daemon(Options options)
     {
         using IPacketSource source = options.ReadFile is { } file ? PacketSource.File(file) : CapturePlatform.Live();
         string hardened = source.Offline ? "" : CapturePlatform.DropPrivileges();
-        // Incoming TCP only; HTTPS and loopback can never be the game connection.
-        source.FilterInbound("tcp and not port 443 and not net 127.0.0.0/8");
+        // HTTPS and loopback can never be the game connection.
+        source.FilterOwn("tcp and not port 443 and not net 127.0.0.0/8");
 
         Listen();
         var writer = new Thread(WriteLoop) { IsBackground = true, Name = "channel writer" };
@@ -94,6 +95,14 @@ sealed class Daemon(Options options)
 
     void Handle(Segment s, DateTimeOffset now)
     {
+        if (s.Outgoing)
+        {
+            // Only to spot ping requests: what the game sends is never kept or passed on.
+            if (flows.TryGetValue(new Connection(s.Source, s.SourcePort, s.Destination, s.DestinationPort), out var sending))
+                sending.Ping.Sent(s.Payload.Span, s.Time.ToUnixTimeMilliseconds());
+            return;
+        }
+
         segments++;
         var key = new Connection(s.Destination, s.DestinationPort, s.Source, s.SourcePort);
         if (flows.TryGetValue(key, out var flow))
@@ -151,6 +160,8 @@ sealed class Daemon(Options options)
     void Feed(Flow flow, Segment s, DateTimeOffset now)
     {
         flow.LastSeen = now;
+        if (flow.Ping.Received(s.Payload.Span, s.Time.ToUnixTimeMilliseconds()) is int ping)
+            Send(ChannelKind.Ping, flow.Id, BitConverter.GetBytes(ping));
         if (s.Syn)
             flow.Assembler.Start(s.Sequence);
         Emit(flow, flow.Assembler.Add(s.Syn ? unchecked(s.Sequence + 1) : s.Sequence, s.Payload.Span, now));

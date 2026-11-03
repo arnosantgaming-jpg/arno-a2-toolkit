@@ -31,6 +31,17 @@ public static class CubeAtlas
 
     public static string Area(string region, int group) => Data[region][group].Area;
 
+    /// <summary>The cube spot at a game position, to within half a metre.</summary>
+    public static CubeSighting? Exact(double x, double y)
+    {
+        foreach (var (region, groups) in Data)
+            foreach (var group in groups)
+                foreach (var spot in group.Spots)
+                    if (Math.Abs(spot[0] - x) <= 50 && Math.Abs(spot[1] - y) <= 50)
+                        return new(region, group.Area, spot[0], spot[1]);
+        return null;
+    }
+
     static Dictionary<string, Group[]> Load()
     {
         using var stream = typeof(CubeAtlas).Assembly.GetManifestResourceStream("cubes.json") ?? throw new InvalidDataException("Missing cube data");

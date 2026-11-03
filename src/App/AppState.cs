@@ -19,13 +19,18 @@ public sealed class AppState
     public Store Store { get; }
     public string CaptureStatus { get; private set; } = "Starting capture…";
     public bool CaptureProblem { get; private set; }
+    /// <summary>Milliseconds to the game server, null until one is measured or when it goes quiet.</summary>
+    public int? Ping => DateTimeOffset.UtcNow - pingAt < TimeSpan.FromSeconds(25) ? ping : null;
     public event Action? Changed;
     public event Action<Notice>? Noticed;
+    public event Action<CubeSighting>? CubeSeen;
     readonly DispatcherTimer tick = new() { Interval = TimeSpan.FromMilliseconds(500) };
     readonly CancellationTokenSource stop = new();
+    readonly CubeWatch cubes = new();
     readonly string? daemonPath;
     Process? daemon;
-    DateTimeOffset lastSave = DateTimeOffset.UtcNow;
+    DateTimeOffset lastSave = DateTimeOffset.UtcNow, pingAt = DateTimeOffset.MinValue;
+    int ping;
 
     public AppState(Store store, ArnoA2.Meter.Store? meter, string? daemonPath)
     {
@@ -35,6 +40,11 @@ public sealed class AppState
         Meter = new ArnoA2.Meter.Engine(meter);
         Engine.Noticed += n => Noticed?.Invoke(n);
         Engine.Decoded += (message, now) => Positions.Observe(message, Engine.LocalEntity, now);
+        Engine.Framed += (frame, now) =>
+        {
+            if (cubes.See(frame, now) is { } cube)
+                CubeSeen?.Invoke(cube);
+        };
         tick.Tick += (_, _) => Tick();
     }
 
@@ -225,6 +235,9 @@ public sealed class AppState
                 Engine.Closed(record.Flow, now);
                 Meter.Closed(record.Flow, now);
                 Positions.Clear();
+                break;
+            case ChannelKind.Ping:
+                (ping, pingAt) = (record.Milliseconds, now);
                 break;
             case ChannelKind.Status:
                 var parts = record.Text.Split('|');
