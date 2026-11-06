@@ -35,6 +35,11 @@ Game ping
   src/Capture/GamePing.cs is adapted from the ping tracker of
   taengu/A2Tools-DPS-Meter (GPL-3.0).
 
+Damage over time and skill name fallbacks
+  The damage-over-time tick layout (MessageDecoder.Tick), the list of skills whose
+  ticks are damage (assets/data/dots.tsv, from its src/data/dot_skill_ids.json) and
+  the fallbacks for unlisted skill ids follow taengu/A2Tools-DPS-Meter (GPL-3.0).
+
 Runtime dependencies (desktop app)
   Avalonia — MIT (licenses/Avalonia-MIT.txt); MicroCom.Runtime — MIT
   (licenses/MicroCom-MIT.txt); Tmds.DBus.Protocol — MIT (licenses/Tmds.DBus-MIT.txt);

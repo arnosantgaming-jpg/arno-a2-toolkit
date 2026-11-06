@@ -4,14 +4,18 @@ An unofficial companion app for **AION 2**, for Linux and Windows. All its tools
 passive capture program:
 
 - **Pets:** ranks, souls, live map and farming spots.
-- **DPS Meter:** damage, skill breakdown, boss view and a fight log.
+- **DPS Meter:** damage, skill breakdown with damage over time, boss view with the boss's HP,
+  and a fight log.
 - **Resource Tracker:** where gathering nodes are, by type, with the closest of each.
 - **Hidden Cube Tracker:** every place a cube can appear, ranked, skipping spots you checked,
   with a sound and an on-screen alert when the game reports a cube (still being tested: it may
   only fire once a cube is being opened). Turn it off in the tool's settings. On KDE the toolkit adds its window rules once, so overlays stay above the game.
 
 All tools share one mini-map: a tool's Mini-map button adds its ring and markers. **Server
-Ping** in the Tools Overlay panel adds a small always-on-top ping readout you can drag anywhere.
+Ping** in the Tools Overlay panel adds a small always-on-top ping readout you can drag anywhere. **Event
+Alerts** in the side menu warns you a few minutes before the Shugo Festival, the Air Raid and the
+Spacetime Rift, each switched on separately. Its times come from the published schedule, so after
+maintenance the game's own Event menu is the one to trust.
 
 Built on Linux (CachyOS, KDE Wayland), where the game runs through Steam and Proton. The
 Windows version is built from the same code and has been tested on a Windows PC.

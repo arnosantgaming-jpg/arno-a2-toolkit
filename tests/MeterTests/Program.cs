@@ -209,6 +209,34 @@ var t0 = DateTimeOffset.Parse("2026-10-24T12:00:00Z");
     logged.Tick(t0.AddSeconds(21));
     Check(logged.History is [{ Boss: true, Killed: true, Target: "Neikel of the East", Damage: 4_000, Players: [{ Name: "Owner", Skills: [{ Name: "Gale Arrow", Damage: 4_000, Hits: 2, Crits: 1, Biggest: 3_000 }] }] }], "a boss fight goes to the history once, skills under one name");
 
+    byte[] Ticked(int actor, int target, uint skill, int damage) => Wire(0x05, 0x38, Cat(Var(target), new byte[] { 0x0A }, Var(actor), Var(0), BitConverter.GetBytes(skill * 100 + 11), Var(damage)));
+    byte[] Mobbed(int entity, int code, int hp) => Wire(0x41, 0x36, Cat(Var(entity), new byte[] { 0x0C, 0, 0, (byte)code, (byte)(code >> 8), (byte)(code >> 16), 0, 0, 2, 1 }, Var(hp), Var(hp), new byte[4]));
+    byte[] Live(int entity, int hp) => Wire(0x00, 0x8D, Cat(Var(entity), new byte[] { 2, 1, 0 }, BitConverter.GetBytes(hp), new byte[4]));
+    var bossed = new Engine(null, new Settings());
+    bossed.Opened(1);
+    bossed.Data(1, Cat(Mobbed(777, 2100003, 10_000), Mobbed(778, 2000002, 500), Player(100, "Owner"), Struck(100, 778, 14_110_000, 400, 1)), t0);
+    Check(bossed.Target() == null, "no HP bar for an ordinary monster");
+    bossed.Data(1, Cat(Struck(100, 777, 14_110_000, 2_500, 1), Live(777, 7_500)), t0.AddSeconds(1));
+    Check(bossed.Target() is { Name: "Neikel of the East", Hp: 7_500, MaxHp: 10_000, Share: 0.75 }, "the boss's HP comes from its spawn and the live record");
+    bossed.Data(1, Wire(0x42, 0x36, Cat(Var(777), new byte[] { 0, 3 })), t0.AddSeconds(2));
+    Check(bossed.Target() is { Hp: 0 }, "a dead boss is empty");
+
+    // A2Tools DPS Meter's readings of a Training Scarecrow whose spawn came before the meter.
+    var scarecrow = new Engine(null, new Settings());
+    scarecrow.Opened(1);
+    scarecrow.Data(1, Cat(Player(100, "Owner"), Struck(100, 25839, 14_110_000, 400, 1)), t0);
+    foreach (string reading in new[] { "55E50000", "DF120000" })
+        scarecrow.Data(1, Convert.FromHexString("14008DEFC901020100" + reading + "00000000"), t0);
+    Check(scarecrow.Target() == null, "an unknown target being hit is not yet a dummy");
+    scarecrow.Data(1, Convert.FromHexString("14008DEFC90102010001000000" + "00000000"), t0);
+    scarecrow.Data(1, Convert.FromHexString("14008DEFC9010201008F380100" + "00000000"), t0);
+    Check(scarecrow.Target() is { Name: "Training Scarecrow", Hp: 0x1388F, MaxHp: 0x1388F }, "a target that stops at 1 HP and fills up again is a dummy");
+
+    var ticking = new Engine(null, new Settings());
+    ticking.Opened(1);
+    ticking.Data(1, Cat(Player(100, "Owner"), Struck(100, 778, 11_410_000, 900, 1), Ticked(100, 778, 11_410_000, 40), Ticked(100, 778, 11_410_000, 60), Ticked(100, 778, 14_110_000, 5_000)), t0);
+    Check(ticking.Snapshot(ticking.Damage.Fight, false).Players is [{ Damage: 1_000, Skills: [{ Name: "Wave Armor", Damage: 900 }, { Name: "Wave Armor - DOT", Damage: 100, Hits: 2, Crits: 0 }] }], "damage over time counts on a row of its own, and only for skills that deal it");
+
     logged.Data(1, Cat(Struck(100, 778, 14_110_000, 500, 1)), t0.AddSeconds(30));
     logged.Data(1, Struck(100, 778, 14_110_000, 500, 1), t0.AddSeconds(35));
     logged.Tick(t0.AddSeconds(50));
@@ -233,6 +261,17 @@ var t0 = DateTimeOffset.Parse("2026-10-24T12:00:00Z");
     reused.Opened(1);
     reused.Data(1, Cat(Spawn(500, 100), Hit(500, 14_010_000, 12_000), Player(500, "Late")), t0);
     Check(reused.Rows(reused.Damage.Fight) is [{ Actor: 500, Name: "Late" }], "an id that turns out to be a player is no summon");
+}
+
+// --- Skill names -----------------------------------------------------------------------
+{
+    Check(GameNames.Skill(11100050) == "Ruinous Blow", "a listed skill id has its name");
+    Check(GameNames.Skill(11100058) == "Ruinous Blow", "an unlisted variant takes its base skill's name");
+    Check(GameNames.Skill(11010047) == "Smashing Blow", "a listed id keeps its own name over its base's");
+    Check(GameNames.Skill(99990058) == "Skill 99990058", "an id with no base skill shows its number");
+    Check(GameNames.Skill(3000017) == "Theostone: Zikel's Vestige", "a Theostone proc's short id finds its Theostone");
+    var old = new FightRecord("x", t0, 10, "", false, false, 300, [new FightPlayer(1, "Arno", null, true, 300, 3, 200, 30, 1, [new FightSkill("Ruinous Blow", 200, 1, 1, 200), new FightSkill("Skill 11100058", 60, 1, 0, 60), new FightSkill("Skill 3000017", 40, 1, 1, 40)])]);
+    Check(Store.Renamed(old).Players[0].Skills is [{ Name: "Ruinous Blow", Damage: 260, Hits: 2, Crits: 1, Biggest: 200 }, { Name: "Theostone: Zikel's Vestige", Damage: 40 }], "an old saved fight gets the names found since, merged into their rows");
 }
 
 Console.WriteLine($"{checks} meter checks passed.");

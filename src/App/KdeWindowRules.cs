@@ -12,7 +12,7 @@ namespace ArnoA2.App;
 public static class KdeWindowRules
 {
     const string Class = "arno-a2-toolkit";
-    public const string TrackerTitle = "Arno's A2 Toolkit · pets", MiniMapTitle = "Arno's A2 Toolkit · mini-map", MeterTitle = "Arno's A2 Toolkit · DPS meter", ResourceTitle = "Arno's A2 Toolkit · resources", CubeTitle = "Arno's A2 Toolkit · hidden cubes", PingTitle = "Arno's A2 Toolkit · ping", CubeAlertTitle = "Arno's A2 Toolkit · cube alert";
+    public const string TrackerTitle = "Arno's A2 Toolkit · pets", MiniMapTitle = "Arno's A2 Toolkit · mini-map", MeterTitle = "Arno's A2 Toolkit · DPS meter", ResourceTitle = "Arno's A2 Toolkit · resources", CubeTitle = "Arno's A2 Toolkit · hidden cubes", PingTitle = "Arno's A2 Toolkit · ping", AlertTitle = "Arno's A2 Toolkit · cube alert";
     static readonly (string Group, (string Key, string Value)[] Entries)[] Rules =
     {
         ("arno-a2-toolkit-minimap", new[]
@@ -47,9 +47,9 @@ public static class KdeWindowRules
         }),
         ("arno-a2-toolkit-cube-alert", new[]
         {
-            ("Description", "Arno's A2 Toolkit cube alert above fullscreen games (added by Arno's A2 Toolkit)"),
+            ("Description", "Arno's A2 Toolkit alerts above fullscreen games (added by Arno's A2 Toolkit)"),
             ("wmclass", Class), ("wmclassmatch", "1"), ("wmclasscomplete", "false"),
-            ("title", CubeAlertTitle), ("titlematch", "1"),
+            ("title", AlertTitle), ("titlematch", "1"),
             ("layer", "overlay"), ("layerrule", "2"), ("above", "true"), ("aboverule", "2"),
             ("acceptfocus", "false"), ("acceptfocusrule", "2"),
             ("skipswitcher", "true"), ("skipswitcherrule", "2"), ("skiptaskbar", "true"), ("skiptaskbarrule", "2")

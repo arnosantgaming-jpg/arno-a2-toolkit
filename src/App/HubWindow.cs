@@ -30,6 +30,7 @@ public sealed class HubSettings
     public int? PingY { get; set; }
     public bool WindowRules { get; set; }
     public string PhoneKey { get; set; } = "";
+    public EventAlerts Events { get; set; } = new();
 
     static string File(string folder) => Path.Combine(folder, "hub.json");
 
@@ -61,7 +62,7 @@ public sealed class HubWindow : Window
     const string SteamGame = "steam://rungameid/3393110";
     readonly Border updatePrompt = new() { IsVisible = false, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent };
     const double NavWidth = 265, DrawerWidth = 1027, DrawerScale = 1.3, MapScale = 1.15;
-    public const string PetsDrawer = "pets", FinderDrawer = "finder", SessionDrawer = "session", MapDrawer = "map", MeterDrawer = "meter", LogDrawer = "log", ResourceDrawer = "resources", ResourceMapDrawer = "resource-map", CubeDrawer = "cubes", CubeMapDrawer = "cube-map", ToolkitDrawer = "toolkit", PhoneDrawer = "phone", AboutDrawer = "about";
+    public const string PetsDrawer = "pets", FinderDrawer = "finder", SessionDrawer = "session", MapDrawer = "map", MeterDrawer = "meter", LogDrawer = "log", ResourceDrawer = "resources", ResourceMapDrawer = "resource-map", CubeDrawer = "cubes", CubeMapDrawer = "cube-map", ToolkitDrawer = "toolkit", PhoneDrawer = "phone", EventsDrawer = "events", AboutDrawer = "about";
 
     static readonly IBrush Ink = Brush.Parse("#05070D");
     static readonly IBrush Bright = Brush.Parse("#E6EDF8");
@@ -99,7 +100,8 @@ public sealed class HubWindow : Window
     ResourceWindow? resources;
     CubeWindow? cubes;
     PingWindow? ping;
-    CubeAlertWindow? cubeAlert;
+    AlertWindow? alert;
+    DateTimeOffset eventsChecked = DateTimeOffset.UtcNow;
     string? opened;
     bool closing;
 
@@ -171,14 +173,18 @@ public sealed class HubWindow : Window
 
         app.Changed += Refresh;
         app.CubeSeen += CubeAlert;
-        clock.Tick += (_, _) => Refresh();
+        clock.Tick += (_, _) =>
+        {
+            Refresh();
+            EventCheck();
+        };
         clock.Start();
         Refresh();
         Opened += (_, _) =>
         {
             if (saved.Phone)
                 phone.Start();
-            if (spots.Preferences.Alerts)
+            if (spots.Preferences.Alerts || saved.Events.Any)
                 KeepAbove();
             if (saved.Restore && saved.Pets)
                 OpenPets();
@@ -201,7 +207,7 @@ public sealed class HubWindow : Window
         {
             app.Changed -= Refresh;
             app.CubeSeen -= CubeAlert;
-            cubeAlert?.Close();
+            alert?.Close();
             clock.Stop();
             phone.Stop();
             pets?.Close();
@@ -255,8 +261,9 @@ public sealed class HubWindow : Window
         Place(canvas, Nav("i-cube.png", "Hidden Cube Tracker", CubeDrawer, ToolTheme.Cubes), 10, 500);
         Place(canvas, Nav("i-gear.png", "Toolkit", ToolkitDrawer, ToolTheme.Toolkit), 10, 550);
         Place(canvas, new Border { Width = 216, Height = 1, Background = Rim }, 24, 610);
-        Place(canvas, Nav("i-phone.png", "Phone Map", PhoneDrawer, ToolTheme.Toolkit), 10, 624);
-        Place(canvas, Nav("i-info.png", "About", AboutDrawer, ToolTheme.Toolkit), 10, 674);
+        Place(canvas, Nav("i-bell.png", "Event Alerts", EventsDrawer, ToolTheme.Toolkit), 10, 624);
+        Place(canvas, Nav("i-phone.png", "Phone Map", PhoneDrawer, ToolTheme.Toolkit), 10, 674);
+        Place(canvas, Nav("i-info.png", "About", AboutDrawer, ToolTheme.Toolkit), 10, 724);
         Mark();
 
         Place(canvas, Text("v" + Version, 14, Off), 32, 958);
@@ -332,6 +339,12 @@ public sealed class HubWindow : Window
             MeterDrawer => ("DPS Meter Settings", "cdps.png", ToolTheme.Meter, () => new MeterSettingsPanel(app, () => meter?.ApplyOpacity())),
             LogDrawer => ("Fight Log", "cdps.png", ToolTheme.Meter, () => new HistoryPanel(app)),
             ToolkitDrawer => ("Toolkit Settings", "i-gear.png", ToolTheme.Toolkit, () => new ToolkitSettingsPanel(app)),
+            EventsDrawer => ("Event Alerts", "i-bell.png", ToolTheme.Toolkit, () => new EventSettingsPanel(saved.Events, () =>
+            {
+                Remember(_ => { });
+                if (saved.Events.Any)
+                    KeepAbove();
+            })),
             PhoneDrawer => ("Phone Map", "i-phone.png", ToolTheme.Toolkit, () => new PhoneSettings(phone, on => Remember(s => s.Phone = on))),
             _ => ("About", "i-info.png", ToolTheme.Toolkit, () => new AboutPanel(app, Version, saved.CheckUpdates, on => Remember(s => s.CheckUpdates = on)))
         };
@@ -854,14 +867,29 @@ public sealed class HubWindow : Window
             metres = Math.Sqrt(Math.Pow(x - player.X, 2) + Math.Pow(y - player.Y, 2)) * position.Map.Metres;
         }
 
-        string text = CubeText(cube.Area, metres);
-        cubeAlert?.Close();
-        cubeAlert = new CubeAlertWindow(text);
-        var shown = cubeAlert;
+        Alert(CubeText(cube.Area, metres), ToolTheme.Cubes);
+    }
+
+    /// <summary>Announces the chosen timed events as their alert time comes round.</summary>
+    void EventCheck()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var due = GameEvents.Due(eventsChecked, now, saved.Events);
+        eventsChecked = now;
+        foreach (var (_, names) in due)
+            Alert(GameEvents.Text(names, saved.Events.Minutes), ToolTheme.Toolkit);
+    }
+
+    /// <summary>A sound, a note at the top of the screen and a banner on the phone map.</summary>
+    void Alert(string text, Color accent)
+    {
+        alert?.Close();
+        alert = new AlertWindow(text, accent);
+        var shown = alert;
         shown.Closed += (_, _) =>
         {
-            if (cubeAlert == shown)
-                cubeAlert = null;
+            if (alert == shown)
+                alert = null;
         };
         shown.Show();
         phone.Alert(text);

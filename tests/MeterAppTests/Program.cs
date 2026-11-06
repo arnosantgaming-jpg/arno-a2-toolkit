@@ -74,8 +74,12 @@ engine.Damage.Reset();
 meter.Refresh();
 Check(Text(meter).Contains("appears here"), "meter empties on reset");
 
-engine.Data(1, Cat(Frame(0x41, 0x36, Cat(Var(778), new byte[] { 0x0C, 0, 0, 0x23, 0x0B, 0x20, 0, 0, 2 })), Struck(4242, 778, 14_110_000, 90_000), Struck(4242, 778, 14_120_000, 60_000), Struck(9001, 778, 17_010_000, 40_000)), now.AddSeconds(10));
-engine.Data(1, Struck(4242, 778, 14_110_000, 80_000), now.AddSeconds(16));
+engine.Data(1, Cat(Frame(0x41, 0x36, Cat(Var(778), new byte[] { 0x0C, 0, 0, 0x23, 0x0B, 0x20, 0, 0, 2, 1 }, Var(1_000_000), Var(1_000_000), new byte[4])), Struck(4242, 778, 14_110_000, 90_000), Struck(4242, 778, 14_120_000, 60_000), Struck(9001, 778, 17_010_000, 40_000)), now.AddSeconds(10));
+engine.Data(1, Cat(Struck(4242, 778, 14_110_000, 80_000), Frame(0x00, 0x8D, Cat(Var(778), new byte[] { 2, 1, 0 }, BitConverter.GetBytes(730_000), new byte[4]))), now.AddSeconds(16));
+meter.Refresh();
+Dispatcher.UIThread.RunJobs();
+Check(Text(meter).Contains("Neikel of the East · 73.0 % · 730.0K / 1.0M"), "the boss's HP shows under the meter");
+Save(meter, "meter-boss.png");
 engine.Damage.Finish();
 var history = new Window { Width = 520, Height = 400, Content = new HistoryPanel(state) };
 history.Show();

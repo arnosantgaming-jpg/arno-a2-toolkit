@@ -18,6 +18,9 @@ public sealed class MeterWindow : Window
     readonly TextBlock clock = new() { FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Ui.Title, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock status = new() { FontSize = 9.5, Foreground = Ui.Muted, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(2, 3, 2, 0) };
     readonly Border fight, session, boss, backdrop;
+    readonly Border hpBar = new() { Height = 18, Margin = new Thickness(0, 4, 0, 0), CornerRadius = new CornerRadius(3), Background = Ui.Track, ClipToBounds = true, IsVisible = false };
+    readonly ColumnDefinition hpLeft = new(1, GridUnitType.Star), hpGone = new(0, GridUnitType.Star);
+    readonly TextBlock hpText = new() { FontSize = 10.5, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
     BreakdownWindow? breakdown;
     bool showSession;
     string rendered = "";
@@ -82,8 +85,14 @@ public sealed class MeterWindow : Window
         footer.Children.Add(grip);
         footer.Children.Add(status);
         DockPanel.SetDock(footer, Dock.Bottom);
+        // The boss's HP, under the table while one is being fought.
+        var hpFill = new Grid { ColumnDefinitions = { hpLeft, hpGone } };
+        hpFill.Children.Add(new Border { Background = Ui.Bar(ToolTheme.Meter) });
+        hpBar.Child = new Panel { Children = { hpFill, hpText } };
+        DockPanel.SetDock(hpBar, Dock.Bottom);
         layout.Children.Add(header);
         layout.Children.Add(footer);
+        layout.Children.Add(hpBar);
         layout.Children.Add(new Border { Child = table, BorderBrush = Ui.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), ClipToBounds = true });
         Content = backdrop = new Border { Child = layout, BorderBrush = Ui.Line, BorderThickness = new Thickness(1) };
         ApplyOpacity();
@@ -152,12 +161,20 @@ public sealed class MeterWindow : Window
         Ui.Select(boss, app.Meter.Settings.MeterBossOnly);
 
         string idle = Idle();
-        string key = $"{showSession}|{target}|{tally.Seconds:F1}|{tally.Incomplete}|{idle}|" + string.Join("|", list.Select(r => $"{r.Actor}:{r.You}:{r.Damage}:{r.Name}:{r.Class}:{r.CombatPower}"));
+        var hp = app.Meter.Target();
+        string key = $"{showSession}|{hp}|{target}|{tally.Seconds:F1}|{tally.Incomplete}|{idle}|" + string.Join("|", list.Select(r => $"{r.Actor}:{r.You}:{r.Damage}:{r.Name}:{r.Class}:{r.CombatPower}"));
         if (key == rendered)
             return;
         rendered = key;
         clock.Text = Clock(tally.Seconds);
         status.Text = tally.Empty ? idle : $"{(target.Length > 0 ? target + " · " : "")}{Short(tally.Damage)} damage{(tally.Incomplete ? " · incomplete (data lost)" : "")}";
+        hpBar.IsVisible = hp != null;
+        if (hp != null)
+        {
+            (hpLeft.Width, hpGone.Width) = (new GridLength(hp.Share, GridUnitType.Star), new GridLength(1 - hp.Share, GridUnitType.Star));
+            hpText.Text = $"{hp.Name} · {(hp.Share * 100).ToString("0.0", CultureInfo.InvariantCulture)} % · {Short(hp.Hp)} / {Short(hp.MaxHp)}";
+        }
+
         rows.Children.Clear();
         // Your row stays on top and keeps your real rank.
         foreach (var (row, rank) in list.Select((row, i) => (row, i + 1)).OrderByDescending(r => r.row.You))

@@ -155,6 +155,22 @@ List<Frame> Split(params byte[][] chunks)
 
     Check(Decode(0x00, 0x8D, Cat(Var(4242), new byte[6])) is SelfHint { Entity: 4242 }, "self hint");
 
+    // Damage-over-time ticks, from two captured in A2Tools DPS Meter's tests.
+    static byte[] FromHex(string hex) => Convert.FromHexString(hex);
+    Check(Decode(0x05, 0x38, FromHex("812A0ABDD1019002BB12270733329312" + "00")) is SkillHits { Hits: [{ Actor: 26813, Target: 5377, Damage: 51, Skill: 1_200_012, Dot: true, Crit: false }] }, "a burn tick is damage over time");
+    Check(Decode(0x05, 0x38, FromHex("F3B7020EA17B020854D6514D01C3414A07D780D100")) is SkillHits { Hits: [{ Actor: 15777, Damage: 77, Skill: 13_730_007, Dot: true }] }, "a tick into a shield still counts");
+    Check(Decode(0x05, 0x38, FromHex("812A09BDD1019002BB12270733329312" + "00")) == null, "a healing tick is no damage");
+    Check(Decode(0x05, 0x38, FromHex("812A0A812A9002BB12270733329312" + "00")) == null, "a tick on oneself is no damage");
+
+    // HP: live records anywhere in a frame, the HP update and the spawn's HP.
+    byte[] Live(int entity, int hp, byte kind = 2) => Cat(new byte[] { 0x8D }, Var(entity), new byte[] { kind, 1, (byte)(kind == 2 ? 0 : 1) }, BitConverter.GetBytes(hp), new byte[4]);
+    Check(MessageDecoder.Healths(new(0x00, 0x8D, Live(5377, 123_456)[1..])) is [(5377, 123_456)], "a live HP record of its own");
+    Check(MessageDecoder.Healths(new(0x04, 0x38, Cat(new byte[7], Live(5377, 900), new byte[3], Live(6000, 50)))) is [(5377, 900), (6000, 50)], "live HP records inside other messages");
+    Check(MessageDecoder.Healths(new(0x00, 0x8D, Live(5377, 900, kind: 1)[1..])).Count == 0, "the player's own record is not an NPC's HP");
+    Check(MessageDecoder.Healths(new(0x00, 0x8D, Cat(Var(5377), new byte[] { 2, 1, 0 }, BitConverter.GetBytes(900), new byte[] { 0, 0, 0, 7 }))).Count == 0, "a look-alike without the zero bytes is skipped");
+    Check(Decode(0x1B, 0x92, Cat(Var(5377), Var(400), Var(1_000))) is EntityHealth { Entity: 5377, Hp: 400, MaxHp: 1_000 }, "an HP update");
+    Check(Decode(0x41, 0x36, Cat(Var(777), new byte[] { 0x0C, 0, 0, 0x33, 0x0B, 0x20, 0, 0, 2, 9, 9 }, new byte[] { 1 }, Var(2_500_000), Var(2_500_000), new byte[4])) is NpcAppeared { Entity: 777, Npc: 2100019, Hp: 2_500_000, MaxHp: 2_500_000 }, "a spawn gives the NPC's HP");
+
     // Skill hits, in the layouts the game sends.
     IReadOnlyList<SkillHit>? Hits(params byte[][] parts) => (Decode(0x04, 0x38, Cat(parts)) as SkillHits)?.Hits;
     byte[] Head(int target, int layout, int actor, uint skill, byte uid = 0x05) => Cat(Var(target), Var(layout), Var(0), Var(actor), BitConverter.GetBytes(skill), new[] { uid }, Var(1));

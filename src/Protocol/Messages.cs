@@ -31,8 +31,11 @@ public sealed record SoulChange(bool Spent, IReadOnlyList<(int Pet, int Amount)>
 /// <summary>14:90 — a pet reached a new rank.</summary>
 public sealed record RankReached(int Pet, int Rank) : Message;
 
-/// <summary>40–42:36 — an NPC came into view.</summary>
-public sealed record NpcAppeared(int Entity, int Npc, float? X, float? Y) : Message;
+/// <summary>40–42:36 — an NPC came into view, with its HP when the record gives it.</summary>
+public sealed record NpcAppeared(int Entity, int Npc, float? X, float? Y, int? Hp = null, int? MaxHp = null) : Message;
+
+/// <summary>1B:92 — an entity's HP and maximum.</summary>
+public sealed record EntityHealth(int Entity, int Hp, int MaxHp) : Message;
 
 /// <summary>42:36 (two-byte form) — an entity left view; reason 3 is death.</summary>
 public sealed record EntityRemoved(int Entity, byte Reason) : Message
@@ -51,9 +54,11 @@ public sealed record EffectCast(int Target, int Caster, float X, float Y) : Mess
 
 /// <summary>One player skill's damage to one target.</summary>
 /// <param name="Power">The actor's attack power, which a summon shares with its owner.</param>
-public sealed record SkillHit(int Actor, int Target, int Damage, uint Skill = 0, int Power = 0, bool Crit = false);
+/// <param name="Dot">A tick of damage over time rather than a hit.</param>
+public sealed record SkillHit(int Actor, int Target, int Damage, uint Skill = 0, int Power = 0, bool Crit = false, bool Dot = false);
 
-/// <summary>04:38 — a player skill hit one target, or several for an area skill.</summary>
+/// <summary>04:38 — a player skill hit one target, or several for an area skill. 05:38 — one
+/// tick of damage over time.</summary>
 public sealed record SkillHits(IReadOnlyList<SkillHit> Hits) : Message;
 
 /// <summary>Frames that, in captures, almost only ever name the player's own entity
@@ -97,6 +102,8 @@ public static class MessageDecoder
             (_, 0x37) when MoveOffset(frame.Op) is int offset => Moved(body, offset),
             (0x2A or 0x2B, 0x38) => Effect(body, renewed: frame.Op == 0x2B),
             (0x04, 0x38) => Hits(body),
+            (0x1B, 0x92) => Health(body),
+            (0x05, 0x38) => Tick(body),
             (0x00, 0x8D) or (0x44, 0x37) or (0x4A, 0x36) => Hint(body),
             (0x91, 0x56) => Merchant(body, now),
             (0x93, 0x56) => new MerchantCleared(),
@@ -288,7 +295,7 @@ public static class MessageDecoder
     {
         for (int i = 3; i + 2 < rest.Length && i < 60; i++)
             if (rest[i] == 0 && rest[i + 1] is 0 or 0x40 && rest[i + 2] == 2)
-                return new NpcAppeared(entity, rest[i - 3] | rest[i - 2] << 8 | rest[i - 1] << 16, null, null);
+                return SpawnHp(new NpcAppeared(entity, rest[i - 3] | rest[i - 2] << 8 | rest[i - 1] << 16, null, null), rest[(i + 3)..]);
         return null;
     }
 
@@ -327,10 +334,60 @@ public static class MessageDecoder
                     (x, y) = (px, py);
             }
 
-            return new NpcAppeared(entity, npc, x, y);
+            return SpawnHp(new NpcAppeared(entity, npc, x, y), body[(npcAt + 6)..]);
         }
 
         return null;
+    }
+
+    // Soon after the NPC id, as A2Tools DPS Meter reads it: 01 hp:varint max:varint.
+    static NpcAppeared SpawnHp(NpcAppeared npc, ReadOnlySpan<byte> after)
+    {
+        for (int i = 0; i < Math.Min(after.Length - 2, 64); i++)
+        {
+            if (after[i] != 1)
+                continue;
+            var r = new Reader(after[(i + 1)..]);
+            if (r.VarInt(out int hp) && hp > 0 && r.VarInt(out int max) && max >= hp)
+                return npc with { Hp = hp, MaxHp = max };
+        }
+
+        return npc;
+    }
+
+    static Message? Health(ReadOnlySpan<byte> body)
+    {
+        var r = new Reader(body);
+        return r.VarInt(out int entity) && entity is >= 100 and <= 9_999_999 && r.VarInt(out int hp) && hp >= 0 && r.VarInt(out int max) && max > 0 && hp <= max
+            ? new EntityHealth(entity, hp, max) : null;
+    }
+
+    /// <summary>
+    /// The live HP that combat traffic carries for each NPC it touches, anywhere in a frame:
+    /// 8D entity:varint 02 01 00 hp:u32 00 00 00 00, as A2Tools DPS Meter reads it. The player's
+    /// own record has 01 01 01 instead, and the four zero bytes keep look-alikes out.
+    /// </summary>
+    public static List<(int Entity, int Hp)> Healths(Frame frame)
+    {
+        var found = new List<(int, int)>();
+        var data = new byte[frame.Body.Length + 2];
+        (data[0], data[1]) = (frame.Op, frame.Family);
+        frame.Body.CopyTo(data, 2);
+        for (int i = 0; i + 1 < data.Length; i++)
+        {
+            if (data[i] != 0x8D)
+                continue;
+            var r = new Reader(data.AsSpan(i + 1));
+            if (!r.VarInt(out int entity) || entity is < 100 or > 9_999_999 || !r.Bytes(11, out var rest))
+                continue;
+            if (rest[0] == 2 && rest[1] == 1 && rest[2] == 0 && BitConverter.ToUInt32(rest[7..]) == 0 && BitConverter.ToUInt32(rest[3..]) is <= int.MaxValue and var hp)
+            {
+                found.Add((entity, (int)hp));
+                i += r.Position;
+            }
+        }
+
+        return found;
     }
 
     // entity:varint 03 x:f32 y:f32 …
@@ -418,6 +475,20 @@ public static class MessageDecoder
         }
 
         return hits.Count > 0 ? new SkillHits(hits) : null;
+    }
+
+    // An effect's tick, as A2Tools DPS Meter reads it: target, effect type, actor, a varint,
+    // the skill times 100 as a u32, then the amount. Types 02 and 0A are damage, 06 and 0E
+    // damage into a shield; the rest are heals, buffs and status. Which skills' ticks are
+    // damage is the meter's call, since many effects tick without being an attack.
+    static Message? Tick(ReadOnlySpan<byte> body)
+    {
+        var r = new Reader(body);
+        if (!r.VarInt(out int target) || target <= 0 || !r.Byte(out byte type) || type is not (0x02 or 0x0A or 0x06 or 0x0E)
+            || !r.VarInt(out int actor) || actor <= 0 || actor == target || !r.VarInt(out _) || !r.U32(out uint raw) || !r.VarInt(out int damage))
+            return null;
+        uint skill = raw / 100;
+        return skill is >= 1 and < 300_000_000 && damage is > 0 and < 100_000_000 ? new SkillHits([new SkillHit(actor, target, damage, skill, Dot: true)]) : null;
     }
 
     // What follows the damage. Layout 4 has a small field (a spirit's has none), bit 0x20

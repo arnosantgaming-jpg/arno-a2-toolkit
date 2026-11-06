@@ -122,7 +122,7 @@ public sealed class Store(string folder)
             try
             {
                 if (JsonSerializer.Deserialize<FightRecord>(System.IO.File.ReadAllText(path), Json) is { } fight)
-                    fights.Add(fight);
+                    fights.Add(Renamed(fight));
             }
             catch (JsonException)
             {
@@ -130,6 +130,24 @@ public sealed class Store(string folder)
             }
 
         return fights.OrderByDescending(f => f.Start).ToArray();
+    }
+
+    /// <summary>A fight saved before a skill's name was known gets it now, merged into the
+    /// skill's own row.</summary>
+    public static FightRecord Renamed(FightRecord fight)
+    {
+        static string Name(string saved) => saved.StartsWith("Skill ", StringComparison.Ordinal) && uint.TryParse(saved.AsSpan(6), out uint id) ? GameNames.Skill(id) : saved;
+        if (!fight.Players.Any(p => p.Skills.Any(s => Name(s.Name) != s.Name)))
+            return fight;
+        return fight with
+        {
+            Players = fight.Players.Select(p => p with
+            {
+                Skills = p.Skills.GroupBy(s => Name(s.Name))
+                    .Select(s => new FightSkill(s.Key, s.Sum(x => x.Damage), s.Sum(x => x.Hits), s.Sum(x => x.Crits), s.Max(x => x.Biggest)))
+                    .OrderByDescending(s => s.Damage).ToArray()
+            }).ToArray()
+        };
     }
 
     public SavedNames? LoadNames()

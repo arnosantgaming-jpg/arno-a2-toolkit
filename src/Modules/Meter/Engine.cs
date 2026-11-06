@@ -27,6 +27,8 @@ public sealed class Engine
     readonly Dictionary<uint, string> connections = new();
     readonly Dictionary<int, int> owners = new();
     readonly Dictionary<int, int> npcs = new();
+    readonly Dictionary<int, (int Hp, int Max)> health = new();
+    readonly HashSet<int> floored = new(), scarecrows = new();
     readonly Dictionary<int, long> combatPower = new();
     readonly Dictionary<int, HashSet<int>> powers = new();
     readonly Dictionary<int, HashSet<uint>> skills = new();
@@ -102,6 +104,9 @@ public sealed class Engine
         classes.Clear();
         owners.Clear();
         npcs.Clear();
+        health.Clear();
+        floored.Clear();
+        scarecrows.Clear();
         combatPower.Clear();
         powers.Clear();
         skills.Clear();
@@ -172,10 +177,8 @@ public sealed class Engine
     void Frame(uint id, Frame frame)
     {
         var message = MessageDecoder.Decode(frame);
-        if (message == null)
-            return;
         // The game connection is the one that carries game messages; follow the newest.
-        if (flow != id && message is CharacterIdentity or ZoneEntered || flow == null)
+        if (message != null && (flow != id && message is CharacterIdentity or ZoneEntered || flow == null))
         {
             if (flow != null && flow != id)
                 Gap(flow.Value, 0, clock);
@@ -185,6 +188,8 @@ public sealed class Engine
 
         if (id != flow)
             return;
+        foreach (var (entity, hp) in MessageDecoder.Healths(frame))
+            Health(entity, hp, null);
         switch (message)
         {
             case CharacterIdentity identity:
@@ -211,9 +216,18 @@ public sealed class Engine
                 break;
             case NpcAppeared npc:
                 npcs[npc.Entity] = npc.Npc;
+                health.Remove(npc.Entity);
+                if (npc is { Hp: int hp, MaxHp: int max })
+                    health[npc.Entity] = (hp, max);
+                break;
+            case EntityHealth update:
+                Health(update.Entity, update.Hp, update.MaxHp);
                 break;
             case EntityRemoved { Died: true } died:
                 Damage.Died(died.Entity);
+                floored.Remove(died.Entity);
+                if (health.TryGetValue(died.Entity, out var last))
+                    health[died.Entity] = (0, last.Max);
                 break;
             case SummonSeen summon:
                 owners[summon.Entity] = summon.Owner;
@@ -221,6 +235,13 @@ public sealed class Engine
             case SkillHits skill:
                 foreach (var hit in skill.Hits)
                 {
+                    if (hit.Dot)
+                    {
+                        if (GameNames.IsDot(hit.Skill))
+                            Damage.Hit(hit.Actor, hit.Damage, clock, TimeSpan.FromSeconds(Settings.MeterQuietSeconds), hit.Target, hit.Skill | GameNames.DotTicks, false, IsBoss(hit.Target));
+                        continue;
+                    }
+
                     Noted(hit);
                     Damage.Hit(hit.Actor, hit.Damage, clock, TimeSpan.FromSeconds(Settings.MeterQuietSeconds), hit.Target, hit.Skill, hit.Crit, IsBoss(hit.Target));
                     if (PlayerClasses.FromSkill(hit.Skill) is { } used)
@@ -232,6 +253,34 @@ public sealed class Engine
                 Hint(hint.Entity);
                 break;
         }
+    }
+
+    // A reading over the known maximum raises it, as A2Tools DPS Meter does, except one far
+    // above it, which is a misread. World bosses give no live HP until under 100 million.
+    void Health(int entity, int hp, int? max)
+    {
+        var known = health.GetValueOrDefault(entity);
+        if (max == null && hp > Math.Max(known.Max, 100_000_000))
+            return;
+        int top = max ?? Math.Max(known.Max, hp);
+        health[entity] = (Math.Min(hp, top), top);
+        // A training dummy stops at 1 HP and fills up again; that tells one whose spawn was missed.
+        if (hp == 1)
+            floored.Add(entity);
+        else if (hp > 1 && floored.Contains(entity))
+            scarecrows.Add(entity);
+    }
+
+    /// <summary>The boss or training dummy taking the most damage in this fight, once its HP
+    /// is known.</summary>
+    public TargetHealth? Target()
+    {
+        var fight = Damage.Fight;
+        if ((fight.HasBoss ? fight.Bosses.MainTarget : fight.MainTarget) is not int target || !health.TryGetValue(target, out var hp) || hp.Max <= 0)
+            return null;
+        string? name = npcs.TryGetValue(target, out int code) ? GameNames.FindNpc(code) is { Kind: NpcKind.Boss or NpcKind.Dummy } npc ? npc.Name : null
+            : scarecrows.Contains(target) ? "Training Scarecrow" : null;
+        return name == null ? null : new TargetHealth(name, hp.Hp, hp.Max);
     }
 
     bool IsBoss(int target) => npcs.TryGetValue(target, out int code) && GameNames.FindNpc(code)?.Kind == NpcKind.Boss;
