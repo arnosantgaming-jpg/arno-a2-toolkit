@@ -24,6 +24,7 @@ public sealed class HubSettings
     public bool Cubes { get; set; }
     public bool Restore { get; set; } = true;
     public bool HideInMenus { get; set; } = true;
+    public bool InGameOnly { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
     public bool Phone { get; set; }
     public bool Ping { get; set; }
@@ -89,7 +90,7 @@ public sealed class HubWindow : Window
     readonly Ellipse dot = new() { Width = 13, Height = 13 }, navDot = new() { Width = 12, Height = 12 };
     readonly TextBlock detected = Text("", 15, Green), navDetected = Text("", 14, Bright);
     readonly TextBlock link = Row(""), character = Row(""), uptime = Row(""), status = Text("", 12.5, Soft);
-    readonly Image petsToggle = new(), meterToggle = new(), resourceToggle = new(), cubeToggle = new(), pingToggle = new(), barsToggle = new(), loginToggle = new(), restoreToggle = new(), menusToggle = new();
+    readonly Image petsToggle = new(), meterToggle = new(), resourceToggle = new(), cubeToggle = new(), pingToggle = new(), barsToggle = new(), loginToggle = new(), restoreToggle = new(), menusToggle = new(), inGameToggle = new();
     readonly Border launch;
     readonly List<(Func<bool> Running, Control Ready, Control Launched)> cards = new();
     Border popOut = null!;
@@ -106,6 +107,7 @@ public sealed class HubWindow : Window
     BarsWindow? bars;
     AlertWindow? alert;
     MenuWatch? menus;
+    readonly Dictionary<Window, PixelPoint> stepped = new();
     readonly DispatcherTimer menuCheck = new() { Interval = TimeSpan.FromMilliseconds(100) };
     static readonly HashSet<string> Overlays = new() { KdeWindowRules.TrackerTitle, KdeWindowRules.MiniMapTitle, KdeWindowRules.MeterTitle, KdeWindowRules.ResourceTitle, KdeWindowRules.CubeTitle, KdeWindowRules.PingTitle, KdeWindowRules.BarsTitle };
     DateTimeOffset eventsChecked = DateTimeOffset.UtcNow;
@@ -186,7 +188,8 @@ public sealed class HubWindow : Window
             EventCheck();
         };
         clock.Start();
-        menuCheck.Tick += (_, _) => HideOverlays(menus?.Open == true);
+        menuCheck.Tick += (_, _) => HideOverlays(menus?.Open == true || saved.InGameOnly && app.Meter.LocalEntity == null);
+        menuCheck.Start();
         Refresh();
         Opened += (_, _) =>
         {
@@ -259,25 +262,21 @@ public sealed class HubWindow : Window
         Show(loginToggle, Desktop.StartsAtLogin);
         Show(restoreToggle, saved.Restore);
         Show(menusToggle, saved.HideInMenus);
+        Show(inGameToggle, saved.InGameOnly);
         WatchMenus();
     }
 
-    // The game's menus cover the screen; the overlays (not alerts) step out of the way while
-    // one is open. The corner is only watched while an overlay is up.
+    // The overlays (not alerts) step out of the way until your character is found and while a
+    // game menu covers the screen. The corner is only watched while an overlay is up.
     void WatchMenus()
     {
         bool wanted = saved.HideInMenus && OverlayWindows().Any();
         if (wanted && menus == null)
-        {
             menus = new MenuWatch();
-            menuCheck.Start();
-        }
         else if (!wanted && menus != null)
         {
             menus.Dispose();
             menus = null;
-            menuCheck.Stop();
-            HideOverlays(false);
         }
     }
 
@@ -285,11 +284,34 @@ public sealed class HubWindow : Window
         Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
             ? desktop.Windows.Where(w => Overlays.Contains(w.Title ?? "")) : Enumerable.Empty<Window>();
 
-    static void HideOverlays(bool hide)
+    // Taken off the screen rather than made see-through, so clicks reach the game beneath.
+    void HideOverlays(bool hide)
     {
-        foreach (var window in OverlayWindows())
-            if (window.IsHitTestVisible == hide)
-                (window.Opacity, window.IsHitTestVisible) = (hide ? 0 : 1, !hide);
+        if (hide)
+        {
+            foreach (var window in OverlayWindows().Where(w => w.IsVisible).ToList())
+            {
+                stepped[window] = window.Position;
+                window.Hide();
+            }
+        }
+        else if (stepped.Count > 0)
+        {
+            // One closed meanwhile is no longer listed and stays closed.
+            var open = OverlayWindows().ToHashSet();
+            foreach (var (window, place) in stepped)
+                if (open.Contains(window) && window is not BarsWindow { HiddenByUser: true })
+                    Reshow(window, place);
+            stepped.Clear();
+        }
+    }
+
+    /// <summary>Shows a hidden overlay where it was, without taking focus from the game.</summary>
+    public static void Reshow(Window window, PixelPoint place)
+    {
+        window.ShowActivated = false;
+        window.Show();
+        window.Position = place;
     }
 
     void Navigation(Canvas canvas)
@@ -566,8 +588,8 @@ public sealed class HubWindow : Window
 
     void QuickSettings(Canvas canvas)
     {
-        var inside = Panel(canvas, 330, 160, "p-quick.png", "Quick Settings");
-        Switch(inside, 54, "Start at login", loginToggle, () =>
+        var inside = Panel(canvas, 330, 168, "p-quick.png", "Quick Settings");
+        Switch(inside, 48, "Start at login", loginToggle, () =>
         {
             try
             {
@@ -578,8 +600,9 @@ public sealed class HubWindow : Window
                 // the switch shows what's really there
             }
         });
-        Switch(inside, 90, "Reopen tools at start", restoreToggle, () => Remember(s => s.Restore = !s.Restore));
-        Switch(inside, 126, "Hide in game menus", menusToggle, () => Remember(s => s.HideInMenus = !s.HideInMenus));
+        Switch(inside, 78, "Reopen tools at start", restoreToggle, () => Remember(s => s.Restore = !s.Restore));
+        Switch(inside, 108, "Hide in game menus", menusToggle, () => Remember(s => s.HideInMenus = !s.HideInMenus));
+        Switch(inside, 138, "Only while in game", inGameToggle, () => Remember(s => s.InGameOnly = !s.InGameOnly));
     }
 
     void ToolsOverlay(Canvas canvas)

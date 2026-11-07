@@ -53,6 +53,7 @@ public sealed class BarsWindow : Window
     double hpShown, chipShown, manaShown, staminaShown, width;
     DateTimeOffset hitAt, fullSince = DateTimeOffset.UtcNow;
     bool hovered, hidden;
+    PixelPoint place;
 
     public BarsWindow(AppState app, BarSettings saved, Action save)
     {
@@ -109,10 +110,21 @@ public sealed class BarsWindow : Window
         Step();
     }
 
+    /// <summary>True while the shortcut has the bars hidden.</summary>
+    public bool HiddenByUser => hidden;
+
     /// <summary>Hides the bars until called again, for a shortcut key.</summary>
     public void Toggle()
     {
         hidden = !hidden;
+        // Off the screen while hidden, so clicks reach the game beneath.
+        if (hidden)
+        {
+            place = Position;
+            Hide();
+        }
+        else
+            HubWindow.Reshow(this, place);
         Step();
     }
 

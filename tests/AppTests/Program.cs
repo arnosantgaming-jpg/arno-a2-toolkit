@@ -699,8 +699,18 @@ Check(Math.Abs(centreX - 0.5) < 1e-9 && Math.Abs(centreY - 0.5) < 1e-9, "Abyss m
     Check((ax, ay, aw, ah) == (1850, 5, 70, 60) && MenuWatch.Area(2560, 1440) == (2467, 7, 93, 80), "the menu corner follows the window size");
     Check(MenuWatch.HasClose(Corner(true), 70, 60), "a menu's close X is seen");
     Check(!MenuWatch.HasClose(Corner(false), 70, 60) && !MenuWatch.HasClose(Corner(false, text: true), 70, 60), "an empty corner or text is no close X");
+    var arrow = new byte[70 * 60 * 3];
+    for (int y = 0; y < MenuWatch.Arrow.Length; y++)
+        for (int x = 0; x < MenuWatch.Arrow[y].Length; x++)
+            if (MenuWatch.Arrow[y][x] == '#')
+            {
+                int i = 3 * ((20 + y) * 70 + 15 + x);
+                (arrow[i], arrow[i + 1], arrow[i + 2]) = (250, 234, 190);
+            }
+    Check(MenuWatch.HasBack(arrow, 70, 60) && MenuWatch.MenuShown(arrow, 70, 60) && !MenuWatch.HasClose(arrow, 70, 60), "a full-screen menu's gold back arrow is seen");
+    Check(!MenuWatch.HasBack(Corner(true), 70, 60) && !MenuWatch.HasBack(Corner(false, text: true), 70, 60), "an X or text is no back arrow");
     var solid = Enumerable.Repeat((byte)230, 70 * 60 * 3).ToArray();
-    Check(!MenuWatch.HasClose(solid, 70, 60), "a bright sky is no close X");
+    Check(!MenuWatch.MenuShown(solid, 70, 60), "a bright sky is no menu");
     Check(BarsWindow.Visibility(true, false, false, false, false, false) == 0, "the shortcut hides the bars");
     Check(BarsWindow.Visibility(false, false, false, false, true, true) is > 0.1 and < 1 && BarsWindow.Visibility(false, false, true, true, true, true) < 0.1 && BarsWindow.Visibility(false, false, false, false, false, true) == 1, "idle dims only when chosen, and full fades further");
     Check(BarsWindow.Visibility(false, true, true, true, true, true) == 1, "the pointer brings faded bars back");

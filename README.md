@@ -22,8 +22,9 @@ anywhere, with a pale strip that shows how much a hit took. The game sends each 
 changes, so a bar is blank until its first change. They dim when you've done nothing for a moment;
 right-click them for size, colours and text. On KDE, System Settings → Shortcuts can give **Show or
 hide HP bars** a key. With **Hide in game menus** on (Quick Settings), every overlay but alerts
-steps aside while a game menu is open, seen from the close button in the game's top-right corner.
-Both were tested on Linux only so far.
+steps aside while a game menu is open, seen from the close X or back arrow in the game's top-right
+corner, and lets clicks through to the game while hidden. With **Only while in game** on, overlays
+wait until the toolkit sees your character. Both were tested on Linux only so far.
 
 Built on Linux (CachyOS, KDE Wayland), where the game runs through Steam and Proton. The
 Windows version is built from the same code and has been tested on a Windows PC.
