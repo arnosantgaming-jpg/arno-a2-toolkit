@@ -62,8 +62,9 @@ public sealed record SkillHit(int Actor, int Target, int Damage, uint Skill = 0,
 public sealed record SkillHits(IReadOnlyList<SkillHit> Hits) : Message;
 
 /// <summary>Frames that, in captures, almost only ever name the player's own entity
-/// (stat updates and a few others). Used to recognise the player mid-session.</summary>
-public sealed record SelfHint(int Entity) : Message;
+/// (stat updates and a few others). Used to recognise the player mid-session. A stat update
+/// (00:8D) also carries the HP, mana, stamina or maximum it changed to.</summary>
+public sealed record SelfHint(int Entity, long? Hp = null, int? Mana = null, int? Stamina = null, long? MaxHp = null, int? MaxMana = null) : Message;
 
 /// <summary>91:56 — Black Cloud Merchant stock for one tab.</summary>
 public sealed record MerchantStock(int Tab, DateTimeOffset RefreshUtc, IReadOnlyList<MerchantOffer> Offers) : Message;
@@ -104,7 +105,8 @@ public static class MessageDecoder
             (0x04, 0x38) => Hits(body),
             (0x1B, 0x92) => Health(body),
             (0x05, 0x38) => Tick(body),
-            (0x00, 0x8D) or (0x44, 0x37) or (0x4A, 0x36) => Hint(body),
+            (0x00, 0x8D) => Stats(body),
+            (0x44, 0x37) or (0x4A, 0x36) => Hint(body),
             (0x91, 0x56) => Merchant(body, now),
             (0x93, 0x56) => new MerchantCleared(),
             _ => null
@@ -529,6 +531,51 @@ public static class MessageDecoder
         if ((flags & 0x40) != 0 && (!r.VarInt(out int absorbed) || absorbed is < 1 or > 8 || !r.Skip(4 * absorbed)))
             return false;
         return r.Remaining == 0 || r.Remaining >= 2 && r.Rest[1] == 0 && r.Rest[0] is >= 1 and <= 7;
+    }
+
+    // entity:varint kind:u8, then groups of count:u8 and per stat an id:u8 and a value: kind 1
+    // is one group of u32 values, kind 2 one of u64 values and kind 3 a u32 group then a u64
+    // group. In the u32 group stat 1 is mana, 3 stamina and 8 the mana maximum; in the u64
+    // group stat 0 is HP and 7 its maximum. The others aren't known yet. A record that doesn't
+    // add up keeps only the entity.
+    static Message? Stats(ReadOnlySpan<byte> body)
+    {
+        var r = new Reader(body);
+        if (!r.VarInt(out int entity) || entity is < 1 or > 10_000_000)
+            return null;
+        var hint = new SelfHint(entity);
+        if (!r.Byte(out byte kind) || kind is < 1 or > 3)
+            return hint;
+        var read = hint;
+        bool whole = (kind == 2 || Group(ref r, wide: false, ref read)) && (kind == 1 || Group(ref r, wide: true, ref read)) && r.Remaining == 0;
+        return whole ? read : hint;
+    }
+
+    static bool Group(ref Reader r, bool wide, ref SelfHint hint)
+    {
+        if (!r.Byte(out byte count))
+            return false;
+        for (int i = 0; i < count; i++)
+        {
+            if (!r.Byte(out byte stat))
+                return false;
+            if (wide)
+            {
+                if (!r.I64(out long big))
+                    return false;
+                if (big >= 0)
+                    hint = stat switch { 0 => hint with { Hp = big }, 7 => hint with { MaxHp = big }, _ => hint };
+            }
+            else
+            {
+                if (!r.U32(out uint small))
+                    return false;
+                if (small <= int.MaxValue)
+                    hint = stat switch { 1 => hint with { Mana = (int)small }, 3 => hint with { Stamina = (int)small }, 8 => hint with { MaxMana = (int)small }, _ => hint };
+            }
+        }
+
+        return true;
     }
 
     static Message? Hint(ReadOnlySpan<byte> body)

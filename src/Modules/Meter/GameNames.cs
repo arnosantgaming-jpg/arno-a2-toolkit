@@ -17,6 +17,15 @@ public sealed record TargetHealth(string Name, int Hp, int MaxHp)
     public double Share => MaxHp > 0 ? Math.Clamp((double)Hp / MaxHp, 0, 1) : 0;
 }
 
+/// <summary>Your own HP, mana and stamina. A maximum the game hasn't sent yet is the highest
+/// value seen; HpSent and ManaSent say the game's own is known.</summary>
+public sealed record Vitals(long? Hp, long MaxHp, int? Mana, int MaxMana, int? Stamina = null, int MaxStamina = 0, bool HpSent = false, bool ManaSent = false)
+{
+    public double HpShare => Hp is long hp && MaxHp > 0 ? Math.Clamp((double)hp / MaxHp, 0, 1) : 0;
+    public double ManaShare => Mana is int mana && MaxMana > 0 ? Math.Clamp((double)mana / MaxMana, 0, 1) : 0;
+    public double StaminaShare => Stamina is int stamina && MaxStamina > 0 ? Math.Clamp((double)stamina / MaxStamina, 0, 1) : 0;
+}
+
 /// <summary>NPC and skill names from the game's tables. A skill has an id for each level
 /// and specialisation, all under one name.</summary>
 public static class GameNames

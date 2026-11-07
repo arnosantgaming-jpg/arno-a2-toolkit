@@ -26,6 +26,8 @@ internal static class Program
         }
         catch (IOException)
         {
+            if (args.Contains(Remote.ToggleBars))
+                return Remote.Send(Remote.ToggleBars) ? 0 : 1;
             Console.Error.WriteLine("Arno's A2 Toolkit is already running.");
             return 0;
         }
@@ -41,6 +43,7 @@ public sealed class App : Application
 {
     public static TrackerWindow? Tracker { get; set; }
     AppState? state;
+    IDisposable? remote;
 
     public override void Initialize()
     {
@@ -63,6 +66,19 @@ public sealed class App : Application
             desktop.MainWindow = hub;
             desktop.ShutdownRequested += (_, _) => state.Stop();
             hub.Closed += (_, _) => state.Stop();
+            try
+            {
+                remote = Remote.Listen(command =>
+                {
+                    if (command == Remote.ToggleBars)
+                        Avalonia.Threading.Dispatcher.UIThread.Post(hub.ToggleBars);
+                });
+                hub.Closed += (_, _) => remote.Dispose();
+            }
+            catch (System.Net.Sockets.SocketException)
+            {
+                // Without it the shortcut does nothing; everything else works.
+            }
             state.Start();
             _ = hub.CheckForUpdates();
         }

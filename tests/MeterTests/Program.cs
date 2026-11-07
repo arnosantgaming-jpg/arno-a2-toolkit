@@ -86,6 +86,27 @@ var t0 = DateTimeOffset.Parse("2026-10-24T12:00:00Z");
     Check(hinted.LocalEntity == 9000 && hinted.Assumed, "player recognised mid-session from self hints");
     hinted.Closed(1, t0);
     Check(hinted.Connection == Connection.Waiting && hinted.LocalEntity == null, "a closed game connection forgets the character");
+
+    byte[] Stat(int entity, byte kind, params (byte Stat, long Value)[] values) => Frame(0x00, 0x8D, Cat(Var(entity), new byte[] { kind, (byte)values.Length }, values.SelectMany(v => Cat(new[] { v.Stat }, kind == 1 ? BitConverter.GetBytes((uint)v.Value) : BitConverter.GetBytes(v.Value))).ToArray()));
+    var vital = new Engine(store: null, new Settings());
+    vital.Data(1, identity, t0);
+    Check(vital.Own() == null, "no vitals before the game sends any");
+    vital.Data(1, Cat(Stat(4242, 2, (0, 20_000)), Stat(4242, 1, (1, 3_000)), Stat(4242, 2, (0, 25_000)), Stat(4242, 1, (3, 126_800))), t0);
+    Check(vital.Own() is { Hp: 25_000, MaxHp: 25_000, Mana: 3_000, MaxMana: 3_000, Stamina: 126_800 }, "a maximum the game hasn't sent is the highest value seen");
+    vital.Data(1, Cat(Stat(4242, 2, (7, 32_947)), Stat(4242, 1, (8, 4_250)), Stat(4242, 2, (0, 30_000))), t0);
+    Check(vital.Own() is { Hp: 30_000, MaxHp: 32_947, MaxMana: 4_250 } own && Math.Abs(own.HpShare - 30_000 / 32_947.0) < 1e-9, "the game's own maximum wins");
+    vital.Data(1, Stat(4242, 2, (7, 30_820)), t0);
+    Check(vital.Own() is { MaxHp: 30_820 }, "a maximum can fall when a buff ends");
+    vital.Data(1, Stat(5000, 2, (0, 99_999)), t0);
+    Check(vital.Own() is { Hp: 30_000 }, "someone else's HP is not yours");
+    Check(vital.ActiveAt == null, "gaining HP is not doing something");
+    vital.Data(1, Stat(4242, 2, (0, 29_000)), t0);
+    Check(vital.ActiveAt == t0, "losing HP counts as doing something");
+    var later = t0.AddSeconds(5);
+    vital.Data(1, Stat(4242, 2, (0, 31_000)), later);
+    Check(vital.ActiveAt == t0, "healing alone does not");
+    vital.Data(1, Stat(4242, 1, (3, 96_800)), later);
+    Check(vital.ActiveAt == later, "spending stamina does");
 }
 
 // --- Settings ----------------------------------------------------------------------------

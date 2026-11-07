@@ -29,6 +29,7 @@ public sealed class Engine
     readonly Dictionary<int, int> npcs = new();
     readonly Dictionary<int, (int Hp, int Max)> health = new();
     readonly HashSet<int> floored = new(), scarecrows = new();
+    readonly Dictionary<int, Vitals> vitals = new();
     readonly Dictionary<int, long> combatPower = new();
     readonly Dictionary<int, HashSet<int>> powers = new();
     readonly Dictionary<int, HashSet<uint>> skills = new();
@@ -107,6 +108,7 @@ public sealed class Engine
         health.Clear();
         floored.Clear();
         scarecrows.Clear();
+        vitals.Clear();
         combatPower.Clear();
         powers.Clear();
         skills.Clear();
@@ -243,6 +245,8 @@ public sealed class Engine
                     }
 
                     Noted(hit);
+                    if (hit.Actor == LocalEntity)
+                        ActiveAt = clock;
                     Damage.Hit(hit.Actor, hit.Damage, clock, TimeSpan.FromSeconds(Settings.MeterQuietSeconds), hit.Target, hit.Skill, hit.Crit, IsBoss(hit.Target));
                     if (PlayerClasses.FromSkill(hit.Skill) is { } used)
                         classes[hit.Actor] = used;
@@ -251,6 +255,8 @@ public sealed class Engine
                 break;
             case SelfHint hint:
                 Hint(hint.Entity);
+                if (hint is not { Hp: null, Mana: null, Stamina: null, MaxHp: null, MaxMana: null })
+                    Vital(hint);
                 break;
         }
     }
@@ -270,6 +276,34 @@ public sealed class Engine
         else if (hp > 1 && floored.Contains(entity))
             scarecrows.Add(entity);
     }
+
+    // The game sends only the new value, so a bar's maximum is the highest value seen.
+    // The game sends the maximums when they change (a buff, a level); until then the highest
+    // value seen stands in.
+    void Vital(SelfHint hint)
+    {
+        var known = vitals.GetValueOrDefault(hint.Entity) ?? new Vitals(null, 0, null, 0);
+        if (hint.Entity == LocalEntity && (hint.Hp < known.Hp || hint.Mana < known.Mana || hint.Stamina < known.Stamina))
+            ActiveAt = clock;
+        if (hint.MaxHp is long maxHp)
+            known = known with { MaxHp = maxHp, HpSent = true };
+        if (hint.MaxMana is int maxMana)
+            known = known with { MaxMana = maxMana, ManaSent = true };
+        if (hint.Hp is long hp)
+            known = known with { Hp = hp, MaxHp = known.HpSent ? known.MaxHp : Math.Max(known.MaxHp, hp) };
+        if (hint.Mana is int mana)
+            known = known with { Mana = mana, MaxMana = known.ManaSent ? known.MaxMana : Math.Max(known.MaxMana, mana) };
+        if (hint.Stamina is int stamina)
+            known = known with { Stamina = stamina, MaxStamina = Math.Max(known.MaxStamina, stamina) };
+        vitals[hint.Entity] = known;
+    }
+
+    /// <summary>When you last did something the game tells of: a hit, or HP, mana or stamina
+    /// going down. Moving alone isn't sent back, so it doesn't count.</summary>
+    public DateTimeOffset? ActiveAt { get; private set; }
+
+    /// <summary>Your own HP, mana and stamina, once the game has sent any of them.</summary>
+    public Vitals? Own() => LocalEntity is int self ? vitals.GetValueOrDefault(self) : null;
 
     /// <summary>The boss or training dummy taking the most damage in this fight, once its HP
     /// is known.</summary>

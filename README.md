@@ -17,6 +17,14 @@ Alerts** in the side menu warns you a few minutes before the Shugo Festival, the
 Spacetime Rift, each switched on separately. Its times come from the published schedule, so after
 maintenance the game's own Event menu is the one to trust.
 
+**HP and Mana** in the Tools Overlay panel adds wide HP, mana and stamina bars you can drag
+anywhere, with a pale strip that shows how much a hit took. The game sends each value only when it
+changes, so a bar is blank until its first change. They dim when you've done nothing for a moment;
+right-click them for size, colours and text. On KDE, System Settings → Shortcuts can give **Show or
+hide HP bars** a key. With **Hide in game menus** on (Quick Settings), every overlay but alerts
+steps aside while a game menu is open, seen from the close button in the game's top-right corner.
+Both were tested on Linux only so far.
+
 Built on Linux (CachyOS, KDE Wayland), where the game runs through Steam and Proton. The
 Windows version is built from the same code and has been tested on a Windows PC.
 

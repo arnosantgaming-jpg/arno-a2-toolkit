@@ -674,5 +674,39 @@ using (var island = SkiaSharp.SKBitmap.Decode(Path.Combine(AppContext.BaseDirect
 }
 var (centreX, centreY) = abyss.Normalize(abyss.World(0.5, 0.5).X, abyss.World(0.5, 0.5).Y);
 Check(Math.Abs(centreX - 0.5) < 1e-9 && Math.Abs(centreY - 0.5) < 1e-9, "Abyss map transform round trip");
+
+// HP bars: menu close X, visibility and readings.
+{
+    byte[] Corner(bool cross, bool text = false)
+    {
+        const int w = 70, h = 60;
+        var rgb = new byte[w * h * 3];
+        void Dot(int x, int y) { int i = 3 * (y * w + x); rgb[i] = rgb[i + 1] = rgb[i + 2] = 230; }
+        if (cross)
+            for (int t = -12; t <= 12; t++)
+            {
+                Dot(37 + t, 30 + t);
+                Dot(37 + t, 30 - t);
+            }
+        if (text)
+            for (int x = 10; x < 60; x++)
+                for (int y = 10; y < 18; y++)
+                    if ((x + y) % 3 == 0)
+                        Dot(x, y);
+        return rgb;
+    }
+    var (ax, ay, aw, ah) = MenuWatch.Area(1920, 1080);
+    Check((ax, ay, aw, ah) == (1850, 5, 70, 60) && MenuWatch.Area(2560, 1440) == (2467, 7, 93, 80), "the menu corner follows the window size");
+    Check(MenuWatch.HasClose(Corner(true), 70, 60), "a menu's close X is seen");
+    Check(!MenuWatch.HasClose(Corner(false), 70, 60) && !MenuWatch.HasClose(Corner(false, text: true), 70, 60), "an empty corner or text is no close X");
+    var solid = Enumerable.Repeat((byte)230, 70 * 60 * 3).ToArray();
+    Check(!MenuWatch.HasClose(solid, 70, 60), "a bright sky is no close X");
+    Check(BarsWindow.Visibility(true, false, false, false, false, false) == 0, "the shortcut hides the bars");
+    Check(BarsWindow.Visibility(false, false, false, false, true, true) is > 0.1 and < 1 && BarsWindow.Visibility(false, false, true, true, true, true) < 0.1 && BarsWindow.Visibility(false, false, false, false, false, true) == 1, "idle dims only when chosen, and full fades further");
+    Check(BarsWindow.Visibility(false, true, true, true, true, true) == 1, "the pointer brings faded bars back");
+    Check(BarsWindow.Reading(30_790, 32_947, "Numbers") == "30,790 / 32,947" && BarsWindow.Reading(16_000, 32_000, "Percent") == "50 %" && BarsWindow.Reading(null, 0, "Numbers") == "", "bar readings");
+    Check(BarsWindow.Dimensions("Small") == (280, 15) && BarsWindow.Dimensions("odd") == (380, 19), "bar sizes");
+}
+
 Console.WriteLine($"{checks} app checks passed; screenshots in {output}");
 

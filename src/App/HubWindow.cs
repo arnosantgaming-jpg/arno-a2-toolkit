@@ -23,12 +23,15 @@ public sealed class HubSettings
     public bool Resources { get; set; }
     public bool Cubes { get; set; }
     public bool Restore { get; set; } = true;
+    public bool HideInMenus { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
     public bool Phone { get; set; }
     public bool Ping { get; set; }
     public int? PingX { get; set; }
     public int? PingY { get; set; }
     public bool WindowRules { get; set; }
+    public int WindowRulesVersion { get; set; }
+    public BarSettings Bars { get; set; } = new();
     public string PhoneKey { get; set; } = "";
     public EventAlerts Events { get; set; } = new();
 
@@ -86,7 +89,7 @@ public sealed class HubWindow : Window
     readonly Ellipse dot = new() { Width = 13, Height = 13 }, navDot = new() { Width = 12, Height = 12 };
     readonly TextBlock detected = Text("", 15, Green), navDetected = Text("", 14, Bright);
     readonly TextBlock link = Row(""), character = Row(""), uptime = Row(""), status = Text("", 12.5, Soft);
-    readonly Image petsToggle = new(), meterToggle = new(), resourceToggle = new(), cubeToggle = new(), pingToggle = new(), loginToggle = new(), restoreToggle = new();
+    readonly Image petsToggle = new(), meterToggle = new(), resourceToggle = new(), cubeToggle = new(), pingToggle = new(), barsToggle = new(), loginToggle = new(), restoreToggle = new(), menusToggle = new();
     readonly Border launch;
     readonly List<(Func<bool> Running, Control Ready, Control Launched)> cards = new();
     Border popOut = null!;
@@ -100,7 +103,11 @@ public sealed class HubWindow : Window
     ResourceWindow? resources;
     CubeWindow? cubes;
     PingWindow? ping;
+    BarsWindow? bars;
     AlertWindow? alert;
+    MenuWatch? menus;
+    readonly DispatcherTimer menuCheck = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    static readonly HashSet<string> Overlays = new() { KdeWindowRules.TrackerTitle, KdeWindowRules.MiniMapTitle, KdeWindowRules.MeterTitle, KdeWindowRules.ResourceTitle, KdeWindowRules.CubeTitle, KdeWindowRules.PingTitle, KdeWindowRules.BarsTitle };
     DateTimeOffset eventsChecked = DateTimeOffset.UtcNow;
     string? opened;
     bool closing;
@@ -179,6 +186,7 @@ public sealed class HubWindow : Window
             EventCheck();
         };
         clock.Start();
+        menuCheck.Tick += (_, _) => HideOverlays(menus?.Open == true);
         Refresh();
         Opened += (_, _) =>
         {
@@ -196,6 +204,8 @@ public sealed class HubWindow : Window
                 OpenCubes();
             if (saved.Restore && saved.Ping)
                 OpenPing();
+            if (saved.Restore && saved.Bars.Open)
+                OpenBars();
         };
         KeyDown += (_, e) =>
         {
@@ -209,12 +219,15 @@ public sealed class HubWindow : Window
             app.CubeSeen -= CubeAlert;
             alert?.Close();
             clock.Stop();
+            menuCheck.Stop();
+            menus?.Dispose();
             phone.Stop();
             pets?.Close();
             meter?.Close();
             resources?.Close();
             cubes?.Close();
             ping?.Close();
+            bars?.Close();
         };
     }
 
@@ -242,8 +255,41 @@ public sealed class HubWindow : Window
         Show(resourceToggle, resources != null);
         Show(cubeToggle, cubes != null);
         Show(pingToggle, ping != null);
+        Show(barsToggle, bars != null);
         Show(loginToggle, Desktop.StartsAtLogin);
         Show(restoreToggle, saved.Restore);
+        Show(menusToggle, saved.HideInMenus);
+        WatchMenus();
+    }
+
+    // The game's menus cover the screen; the overlays (not alerts) step out of the way while
+    // one is open. The corner is only watched while an overlay is up.
+    void WatchMenus()
+    {
+        bool wanted = saved.HideInMenus && OverlayWindows().Any();
+        if (wanted && menus == null)
+        {
+            menus = new MenuWatch();
+            menuCheck.Start();
+        }
+        else if (!wanted && menus != null)
+        {
+            menus.Dispose();
+            menus = null;
+            menuCheck.Stop();
+            HideOverlays(false);
+        }
+    }
+
+    static IEnumerable<Window> OverlayWindows() =>
+        Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+            ? desktop.Windows.Where(w => Overlays.Contains(w.Title ?? "")) : Enumerable.Empty<Window>();
+
+    static void HideOverlays(bool hide)
+    {
+        foreach (var window in OverlayWindows())
+            if (window.IsHitTestVisible == hide)
+                (window.Opacity, window.IsHitTestVisible) = (hide ? 0 : 1, !hide);
     }
 
     void Navigation(Canvas canvas)
@@ -521,7 +567,7 @@ public sealed class HubWindow : Window
     void QuickSettings(Canvas canvas)
     {
         var inside = Panel(canvas, 330, 160, "p-quick.png", "Quick Settings");
-        Switch(inside, 62, "Start at login", loginToggle, () =>
+        Switch(inside, 54, "Start at login", loginToggle, () =>
         {
             try
             {
@@ -532,7 +578,8 @@ public sealed class HubWindow : Window
                 // the switch shows what's really there
             }
         });
-        Switch(inside, 106, "Reopen tools at start", restoreToggle, () => Remember(s => s.Restore = !s.Restore));
+        Switch(inside, 90, "Reopen tools at start", restoreToggle, () => Remember(s => s.Restore = !s.Restore));
+        Switch(inside, 126, "Hide in game menus", menusToggle, () => Remember(s => s.HideInMenus = !s.HideInMenus));
     }
 
     void ToolsOverlay(Canvas canvas)
@@ -545,33 +592,40 @@ public sealed class HubWindow : Window
             else
                 pets.Close();
         }, true);
-        Switch(inside, 110, "DPS Meter", meterToggle, () =>
+        Switch(inside, 104, "DPS Meter", meterToggle, () =>
         {
             if (meter == null)
                 OpenMeter();
             else
                 meter.Close();
         }, true);
-        Switch(inside, 158, "Resource Tracker", resourceToggle, () =>
+        Switch(inside, 146, "Resource Tracker", resourceToggle, () =>
         {
             if (resources == null)
                 OpenResources();
             else
                 resources.Close();
         }, true);
-        Switch(inside, 206, "Hidden Cubes", cubeToggle, () =>
+        Switch(inside, 188, "Hidden Cubes", cubeToggle, () =>
         {
             if (cubes == null)
                 OpenCubes();
             else
                 cubes.Close();
         }, true);
-        Switch(inside, 254, "Server Ping", pingToggle, () =>
+        Switch(inside, 230, "Server Ping", pingToggle, () =>
         {
             if (ping == null)
                 OpenPing();
             else
                 ping.Close();
+        }, true);
+        Switch(inside, 272, "HP and Mana", barsToggle, () =>
+        {
+            if (bars == null)
+                OpenBars();
+            else
+                bars.Close();
         }, true);
     }
 
@@ -853,6 +907,33 @@ public sealed class HubWindow : Window
         }
     }
 
+    /// <summary>The bars' shortcut: opens them when off, else hides or shows them.</summary>
+    public void ToggleBars()
+    {
+        if (bars == null)
+            OpenBars();
+        else
+            bars.Toggle();
+    }
+
+    public void OpenBars()
+    {
+        if (bars == null)
+        {
+            bars = new BarsWindow(app, saved.Bars, () => saved.Save(folder));
+            bars.Closed += (_, _) =>
+            {
+                bars = null;
+                Remember(s => s.Bars.Open = false);
+                Refresh();
+            };
+            bars.Show();
+            KeepAbove();
+            Remember(s => s.Bars.Open = true);
+            Refresh();
+        }
+    }
+
     /// <summary>What an alert says: where the cube is and how far from you, when that's known.</summary>
     public static string CubeText(string area, double? metres) => "Hidden Cube: " + area + (metres is double m ? $", {Math.Round(m).ToString("0", System.Globalization.CultureInfo.InvariantCulture)} m away" : "");
 
@@ -900,7 +981,7 @@ public sealed class HubWindow : Window
     // for once, so someone who removes them isn't overruled at every start.
     void KeepAbove()
     {
-        if (!KdeWindowRules.Available || saved.WindowRules)
+        if (!KdeWindowRules.Available || saved.WindowRules && saved.WindowRulesVersion >= KdeWindowRules.Version)
             return;
         _ = Task.Run(() =>
         {
@@ -908,7 +989,7 @@ public sealed class HubWindow : Window
             {
                 if (!KdeWindowRules.Installed())
                     KdeWindowRules.Install();
-                Dispatcher.UIThread.Post(() => Remember(s => s.WindowRules = true));
+                Dispatcher.UIThread.Post(() => Remember(s => (s.WindowRules, s.WindowRulesVersion) = (true, KdeWindowRules.Version)));
             }
             catch (Exception ex) when (ex is IOException or System.ComponentModel.Win32Exception or InvalidOperationException)
             {

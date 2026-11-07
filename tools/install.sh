@@ -52,7 +52,12 @@ Exec=$bin
 Icon=$id-logo
 Terminal=false
 Categories=Game;
-StartupWMClass=arno-a2-toolkit"
+StartupWMClass=arno-a2-toolkit
+Actions=toggle-bars;
+
+[Desktop Action toggle-bars]
+Name=Show or hide HP bars
+Exec=$bin --toggle-bars"
 printf '%s\n' "$entry" > "$share/applications/$id.desktop"
 if [[ "$autostart" == yes ]]; then
     mkdir -p "$config/autostart"

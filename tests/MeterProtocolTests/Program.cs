@@ -154,6 +154,13 @@ List<Frame> Split(params byte[][] chunks)
     Check(Decode(0x41, 0x36, Cat(Var(22224), new byte[] { 0x5F, 0, 0 }, new byte[200], mark, Var(4631))) == null, "a mark far away is something else");
 
     Check(Decode(0x00, 0x8D, Cat(Var(4242), new byte[6])) is SelfHint { Entity: 4242 }, "self hint");
+    // Stat updates, captured: one group of u32 values (kind 1), of u64 values (kind 2), or both (kind 3).
+    Check(Decode(0x00, 0x8D, Convert.FromHexString("C67D020100F15C000000000000")) is SelfHint { Entity: 16070, Hp: 23_793, Mana: null }, "a stat update gives your HP");
+    Check(Decode(0x00, 0x8D, Convert.FromHexString("CC53010101CF0F0000")) is SelfHint { Entity: 10700, Mana: 4_047, Hp: null }, "a stat update gives your mana");
+    Check(Decode(0x00, 0x8D, Cat(Var(3867), new byte[] { 1, 1, 3 }, BitConverter.GetBytes(126_800))) is SelfHint { Stamina: 126_800, Mana: null }, "a stat update gives your stamina");
+    Check(Decode(0x00, 0x8D, Cat(Var(3867), new byte[] { 3, 1, 6 }, BitConverter.GetBytes(365_375), new byte[] { 1, 0 }, BitConverter.GetBytes(23_875L))) is SelfHint { Hp: 23_875, Stamina: null }, "both groups in one update");
+    Check(Decode(0x00, 0x8D, Convert.FromHexString("9B1E0301089A1000000107B380000000000000")) is SelfHint { Entity: 3867, MaxMana: 4_250, MaxHp: 32_947, Hp: null }, "a buff sends the new maximums");
+    Check(Decode(0x00, 0x8D, Cat(Convert.FromHexString("9B1E0301089A1000000107B380000000000000"), new byte[1])) is SelfHint { Entity: 3867, MaxHp: null, MaxMana: null }, "an update that doesn't add up keeps only the entity");
 
     // Damage-over-time ticks, from two captured in A2Tools DPS Meter's tests.
     static byte[] FromHex(string hex) => Convert.FromHexString(hex);
