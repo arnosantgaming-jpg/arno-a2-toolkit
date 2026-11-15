@@ -22,8 +22,8 @@ public sealed class TrackerWindow : Window
     readonly StackPanel rows = new();
     readonly TextBlock status = new() { FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(2, 3, 2, 0) };
     readonly TextBlock session = new() { FontSize = 9.5, Foreground = Ui.Muted, Margin = new Thickness(6, 3, 2, 0) };
-    readonly Border toast = new() { Background = Brush.Parse("#332E8CFF"), BorderBrush = Ui.Accent, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(6, 3), Margin = new Thickness(0, 0, 0, 3), IsVisible = false };
-    readonly Border recent, nearby, hideMaxed, backdrop = new() { BorderBrush = Ui.Line, BorderThickness = new Thickness(1) };
+    readonly Border toast = new() { Background = Brush.Parse("#33339DFF"), BorderBrush = Ui.Accent, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), Padding = new Thickness(6, 3), Margin = new Thickness(0, 0, 0, 3), IsVisible = false };
+    readonly Border recent, nearby, hideMaxed, backdrop = new() { CornerRadius = new CornerRadius(8), BorderBrush = Navy.OverlayRim, BorderThickness = new Thickness(1) };
     readonly Image art = new() { Stretch = Stretch.UniformToFill };
     readonly DispatcherTimer toastTimer = new() { Interval = TimeSpan.FromSeconds(6) };
     FullMapWindow? fullMap;
@@ -74,7 +74,7 @@ public sealed class TrackerWindow : Window
         table.Children.Add(titles);
         table.Children.Add(new ScrollViewer { Content = rows });
 
-        var layout = new DockPanel { Margin = new Thickness(5) };
+        var layout = new DockPanel { Margin = new Thickness(9, 6, 9, 6) };
         DockPanel.SetDock(header, Dock.Top);
         var grip = new TextBlock { Text = "◢", FontSize = 9, Foreground = Ui.Muted, Cursor = new Cursor(StandardCursorType.BottomRightCorner), Padding = new Thickness(4, 2, 0, 0) };
         grip.PointerPressed += (_, e) => BeginResizeDrag(WindowEdge.SouthEast, e);
@@ -89,7 +89,7 @@ public sealed class TrackerWindow : Window
         layout.Children.Add(header);
         layout.Children.Add(footer);
         layout.Children.Add(toast);
-        layout.Children.Add(new Border { Child = table, BorderBrush = Ui.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), ClipToBounds = true });
+        layout.Children.Add(new Border { Child = table, CornerRadius = new CornerRadius(5), ClipToBounds = true });
 
         string picture = Path.Combine(AppContext.BaseDirectory, "hub", "tracker-bg.png");
         art.Source = File.Exists(picture) ? new Bitmap(picture) : null;
@@ -103,6 +103,7 @@ public sealed class TrackerWindow : Window
         Opened += (_, _) =>
         {
             Place();
+            maps.Hub.Mini.Join(maps);
             PositionChanged += (_, e) => app.Engine.ChangeSettings(s => (s.TrackerX, s.TrackerY) = (e.Point.X, e.Point.Y));
             SizeChanged += (_, e) => app.Engine.ChangeSettings(s => (s.TrackerWidth, s.TrackerHeight) = (e.NewSize.Width, e.NewSize.Height));
         };

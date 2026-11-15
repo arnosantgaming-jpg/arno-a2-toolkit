@@ -20,13 +20,18 @@ public sealed record Frame(byte Op, byte Family, byte[] Body)
 ///
 /// The stream may be joined mid-message (tracker started late, capture gap). Bytes
 /// that cannot start a frame are skipped one at a time until the stream lines up.
+/// Until it has, a stray byte can read as a length of up to a megabyte and swallow a
+/// minute of real frames. So until a bundle decodes and tiles cleanly, which a stray byte
+/// all but never does, a frame over <see cref="TrustedFrame"/> bytes only counts if a run
+/// of frames follows it, and none may exceed <see cref="MaxUnsynced"/>.
 /// Bundles are complete units, so errors inside them are reported, not skipped over.
 /// </summary>
 public sealed class FrameStream
 {
-    public const int MaxBundle = 1_000_000, MaxPending = 1 << 20, MaxNesting = 3;
+    public const int MaxBundle = 1_000_000, MaxPending = 1 << 20, MaxNesting = 3, TrustedFrame = 1024, MaxUnsynced = 64 * 1024;
     byte[] buffer = new byte[64 * 1024];
     int start, end;
+    bool synced;
 
     public long Frames { get; private set; }
     public long SkippedBytes { get; private set; }
@@ -35,7 +40,7 @@ public sealed class FrameStream
     public event Action<string>? Faulted;
 
     /// <summary>Drop buffered bytes, e.g. after a TCP gap.</summary>
-    public void Reset() => start = end = 0;
+    public void Reset() => (start, end, synced) = (0, 0, false);
 
     public void Push(ReadOnlySpan<byte> bytes)
     {
@@ -92,8 +97,32 @@ public sealed class FrameStream
             case Length.Incomplete:
                 return 0;
             case Length.Invalid:
+                synced = false;
                 SkippedBytes++;
                 return 1;
+        }
+
+        if (!synced)
+        {
+            if (total > MaxUnsynced)
+            {
+                SkippedBytes++;
+                return 1;
+            }
+
+            switch (Follows(data[Math.Min(total, data.Length)..]))
+            {
+                case Length.Invalid when data.Length > total:
+                    SkippedBytes++;
+                    return 1;
+                case Length.Ok when data.Length > total:
+                    break;
+                default:
+                    // Nothing after it yet: a small frame is taken on trust, a big one waits.
+                    if (total > TrustedFrame)
+                        return 0;
+                    break;
+            }
         }
 
         if (data.Length < total)
@@ -124,8 +153,35 @@ public sealed class FrameStream
                 return 2;
         }
 
-        ReadAll(output, 1);
+        synced = ReadAll(output, 1);
         return 6 + consumed;
+    }
+
+    /// <summary>Whether frames can follow here: a few in a row, or a bundle. Ok once the
+    /// run reaches the end of what has arrived, Incomplete if nothing has.</summary>
+    static Length Follows(ReadOnlySpan<byte> data)
+    {
+        const int Run = 4;
+        int at = 0;
+        for (int hop = 0; hop < Run && at < data.Length; hop++)
+        {
+            var rest = data[at..];
+            if (rest[0] == 0xFF && (rest.Length == 1 || rest[1] == 0xFF))
+                return Length.Ok;
+            switch (FrameLength(rest, out _, out int total))
+            {
+                case Length.Invalid:
+                    return Length.Invalid;
+                case Length.Incomplete:
+                    return hop == 0 ? Length.Incomplete : Length.Ok;
+            }
+
+            if (total > MaxUnsynced)
+                return Length.Invalid;
+            at += total;
+        }
+
+        return at == 0 ? Length.Incomplete : Length.Ok;
     }
 
     enum Length
@@ -158,8 +214,8 @@ public sealed class FrameStream
         return Length.Invalid;
     }
 
-    /// <summary>Frames inside a decompressed bundle must tile it exactly.</summary>
-    void ReadAll(ReadOnlySpan<byte> data, int depth)
+    /// <summary>Frames inside a decompressed bundle must tile it exactly; false if they don't.</summary>
+    bool ReadAll(ReadOnlySpan<byte> data, int depth)
     {
         int at = 0;
         while (at < data.Length)
@@ -167,12 +223,14 @@ public sealed class FrameStream
             if (FrameLength(data[at..], out int width, out int total) != Length.Ok || at + total > data.Length)
             {
                 Fault("Bad frame boundary inside a bundle");
-                return;
+                return false;
             }
 
             Emit(data.Slice(at + width, total - width), depth);
             at += total;
         }
+
+        return true;
     }
 
     void Emit(ReadOnlySpan<byte> frame, int depth)

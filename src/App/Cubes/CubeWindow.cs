@@ -95,7 +95,6 @@ public sealed class CubeSettingsPanel : UserControl
         }));
         panel.Children.Add(Ui.Note("A cube comes back at any spot of its group and the game has no known timer, so this is only how long the ranking leaves a spot alone. Checked spots are forgotten when the toolkit closes."));
         MapToolWindow.LookSettings(panel, saved, layer.Save, window);
-        MiniMapSettings.Add(panel, layer.Hub);
         Content = panel;
     }
 }

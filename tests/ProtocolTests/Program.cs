@@ -118,6 +118,10 @@ List<Frame> Split(params byte[][] chunks)
     stream.Push(Cat(new byte[] { 0x80, 0x00, 0x02 }, a));
     Check(resynced.Count == 1 && resynced[0].Code == 0x1122 && stream.SkippedBytes == 3, "resync after garbage");
 
+    // A stray length of 196,608 bytes is too big to be real before the stream has lined up.
+    var late = Split(Cat(new byte[] { 0x80, 0x80, 0x0C }, a), Cat(Enumerable.Repeat(a, 300).ToArray()));
+    Check(late.Count == 301 && late.All(f => f.Code == 0x1122), "a stray huge length does not swallow the frames after it");
+
     var faulty = new FrameStream();
     int faults = 0;
     faulty.Faulted += _ => faults++;

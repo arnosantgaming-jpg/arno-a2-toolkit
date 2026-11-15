@@ -62,7 +62,7 @@ function remember(name, value) {
   try { localStorage.setItem("a2-" + name, JSON.stringify(value)); } catch { }
 }
 
-let state = null, shown = null, heading = null;
+let state = null, shown = null, heading = null, headingAt = 0;
 let zoom = remembered("zoom", 3), turning = remembered("turn", false), follow = true;
 const chosen = new Set(remembered("layers", ["pets", "nodes", "cubes"]));
 let center = [0.5, 0.5];
@@ -304,7 +304,9 @@ async function poll() {
     const next = await reply.json(), first = !state, moved = state && state.region !== next.region;
     if (moved) { follow = true; shown = null; }
     state = next;
-    heading = next.heading ?? null;
+    // The cone goes unread for moments: keep the last direction up to 10 s rather than snap north up.
+    if (next.heading != null) { heading = next.heading; headingAt = Date.now(); }
+    else if (Date.now() - headingAt > 10000) heading = null;
     if (first) buildTools();
     for (const layer of next.layers)
       if (revisions[layer.id] !== layer.revision || moved) {

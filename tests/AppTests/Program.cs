@@ -80,7 +80,7 @@ var hub = new HubWindow(state, maps);
 hub.Show();
 Save(hub, "hub.png");
 Check(Text(hub).Contains("DPS Meter") && Text(hub).Contains("Pet Tracker") && Text(hub).Contains("Hidden Cube Tracker") && !Text(hub).Contains("Coming soon"), "the main window lists the tools");
-Check(Text(hub).Contains("Server Ping"), "the ping overlay has a switch");
+Check(Text(hub).Contains("Server Ping") && Text(hub).Contains("Mini-map"), "the ping overlay and the mini-map have switches");
 var cubeFile = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../data/CubeSpots.json"))).RootElement;
 var firstRegion = cubeFile.EnumerateObject().First();
 var firstGroup = firstRegion.Value[0];
@@ -115,7 +115,7 @@ cubeNote.Close();
 var events = new EventAlerts { Shugo = true, AirRaid = true, Rift = true, Minutes = 2 };
 var noon = DateTimeOffset.Parse("2026-11-06T12:00:00Z");
 Check(GameEvents.StartingAt(noon, events).SequenceEqual(new[] { GameEvents.Shugo, GameEvents.Rift }), "21:00 on Global has the Shugo Festival and a rift");
-Check(GameEvents.StartingAt(noon.AddMinutes(30), events).SequenceEqual(new[] { GameEvents.AirRaid }), "half past has the Air Raid");
+Check(GameEvents.StartingAt(noon.AddMinutes(30), events).SequenceEqual(new[] { GameEvents.AirRaid }), "half past has the Dimensional Invasion");
 Check(!GameEvents.StartingAt(noon.AddHours(1), events).Contains(GameEvents.Rift), "rifts are three hours apart");
 Check(GameEvents.StartingAt(noon.AddHours(2), new EventAlerts { Rift = true, Server = "Korea" }).Contains(GameEvents.Rift)
     && !GameEvents.StartingAt(noon, new EventAlerts { Rift = true, Server = "Korea" }).Any(), "Korea's rifts open two hours after Global's");
@@ -126,7 +126,7 @@ Check(due is [{ Names: [GameEvents.Shugo, GameEvents.Rift] }] && due[0].Start ==
 Check(GameEvents.Due(noon.AddMinutes(-2), noon.AddMinutes(-2).AddSeconds(1), events).Count == 0, "and only once");
 Check(GameEvents.Due(noon.AddHours(-5), noon.AddMinutes(10), events).Count == 0, "after a long sleep old events are not announced");
 Check(GameEvents.Next(GameEvents.AirRaid, noon.AddMinutes(1), events) == noon.AddMinutes(30) && GameEvents.Next(GameEvents.Shugo, noon, events) == noon, "the next start is found");
-Check(GameEvents.Text(new[] { GameEvents.Shugo, GameEvents.Rift }, 2) == "Shugo Festival and Spacetime Rift in 2 min" && GameEvents.Text(new[] { GameEvents.AirRaid }, 0) == "Air Raid starts now", "the alert says what starts when");
+Check(GameEvents.Text(new[] { GameEvents.Shugo, GameEvents.Rift }, 2) == "Shugo Festival and Spacetime Rift in 2 min" && GameEvents.Text(new[] { GameEvents.AirRaid }, 0) == "Dimensional Invasion starts now", "the alert says what starts when");
 var eventPanel = new Window { Width = 620, Height = 520, Content = new EventSettingsPanel(events, () => { }) };
 eventPanel.Show();
 Dispatcher.UIThread.RunJobs();
@@ -140,13 +140,70 @@ Dispatcher.UIThread.RunJobs();
 Check(pingWindow.Title == KdeWindowRules.PingTitle && Text(pingWindow).Contains("PING") && Text(pingWindow).Contains("—"), "the ping overlay waits for a reading");
 Save(pingWindow, "ping.png");
 pingWindow.Close();
+var look = new SessionLook();
+var sessionWindow = new SessionWindow(state, look, () => { }, null, null, (_, _) => { });
+sessionWindow.Show();
+Dispatcher.UIThread.RunJobs();
+Check(sessionWindow.Title == KdeWindowRules.SessionTitle && Text(sessionWindow).Contains("SESSION") && Text(sessionWindow).Contains("Kinah") && Text(sessionWindow).Contains("Rank Points"), "the session window lists the currencies");
+Save(sessionWindow, "session.png");
+look.Hidden.Add("Kinah");
+sessionWindow.Layout();
+sessionWindow.Layout();
+Dispatcher.UIThread.RunJobs();
+Check(!Text(sessionWindow).Split("\n").Contains("Kinah") && Text(sessionWindow).Contains("Bound Kinah") && Text(sessionWindow).Contains("SESSION") && Text(sessionWindow).Contains("Abyss Points"), "the open window lays out again when a currency is hidden");
+look.Hidden.Clear();
+sessionWindow.Close();
+look.Columns = 2;
+look.Hidden.Add("Bound Kinah");
+look.Size = "Large";
+var sessionGrid = new SessionWindow(state, look, () => { }, null, null, (_, _) => { });
+sessionGrid.Show();
+Dispatcher.UIThread.RunJobs();
+Check(!Text(sessionGrid).Contains("Bound Kinah") && Text(sessionGrid).Contains("Abyss Points"), "a hidden currency is left out");
+Save(sessionGrid, "session-grid.png");
+sessionGrid.Close();
+look.Columns = 4;
+var sessionStrip = new SessionWindow(state, look, () => { }, null, null, (_, _) => { });
+sessionStrip.Show();
+Dispatcher.UIThread.RunJobs();
+Check(sessionStrip.Bounds.Width > 2.5 * sessionStrip.Bounds.Height, "one row puts the session time in front");
+Save(sessionStrip, "session-strip.png");
+sessionStrip.Close();
+var itemNow = DateTimeOffset.UtcNow;
+foreach (var (slot, at) in new[]
+{
+    (new BagSlot(610_660_027, 2, BagChange.New, 305_336), 0), (new BagSlot(610_610_014, 1, BagChange.New, 1_005_925), 20), (new BagSlot(115_060_023, 1, BagChange.New, 1_156_485), 40),
+    (new BagSlot(930_100_031, 412_615, BagChange.Changed, 1_161_768), 50), (new BagSlot(930_100_031, 413_291, BagChange.Changed, 1_161_768), 51)
+})
+    state.Meter.Items.Saw(slot, itemNow.AddSeconds(at));
+var itemLook = new ItemLogLook();
+var itemWindow = new ItemLogWindow(state, itemLook, () => { }, null, null, (_, _) => { });
+itemWindow.Show();
+Dispatcher.UIThread.RunJobs();
+Check(itemWindow.Title == KdeWindowRules.ItemLogTitle && Text(itemWindow).Contains("Ruby Gemstone") && Text(itemWindow).Contains("Fine Odyle") && Text(itemWindow).Contains("+676"), "the item log names what was obtained");
+Save(itemWindow, "item-log.png");
+itemLook.HiddenTypes.Add("Currency");
+itemLook.HiddenGrades.Add("Rare");
+itemWindow.Refresh(true);
+Dispatcher.UIThread.RunJobs();
+Check(!Text(itemWindow).Contains("Kina") && !Text(itemWindow).Contains("Fine Odyle") && Text(itemWindow).Contains("Ruby Gemstone"), "the item log filters by type and grade");
+itemWindow.Close();
+itemLook.Reset();
+Check(itemLook is { Lines: 10, Times: true, HiddenGrades.Count: 0, HiddenTypes.Count: 0 }, "the item log's layout resets");
+Check(ItemTable.Count > 9000 && ItemTable.Get(610_660_027) is { Name: "Ruby Gemstone", Type: "Materials", Grade: "Common" } && ItemTable.Get(930_100_031).Type == "Currency" && ItemTable.Get(534_660_160).Type == "Pets and souls"
+    && ItemTable.Get(115_060_023).Type == "Gear" && ItemTable.Get(530_126_003).Type == "Consumables" && ItemTable.Get(1).Name == "Item 1", "item names, types and grades");
+Check(ItemTable.Grades.All(g => ItemTable.ColorOf(g.Grade) == g.Color) && ItemTable.ColorOf("nonsense") == "#C3C3C3", "each grade has its colour");
+look.Reset();
+Check(look is { Columns: 1, Rates: true, Size: "Medium", Hidden.Count: 0 }, "the layout resets to how it first looks");
+Check(SessionWindow.Cell(0, 2) == (0, 0) && SessionWindow.Cell(1, 2) == (0, 1) && SessionWindow.Cell(2, 2) == (1, 0) && SessionWindow.Cell(3, 4) == (0, 3) && SessionWindow.Cell(3, 1) == (3, 0), "currencies fill each row before the next");
+Check(ArnoA2.Meter.SessionGains.Tracked.All(t => SessionWindow.Colors.ContainsKey(t.Name)) && SessionWindow.Colors["Kinah"] != SessionWindow.Colors["Bound Kinah"], "each currency has its own colour");
 Check(PingWindow.Reading(42) == "42 ms" && PingWindow.Reading(null) == "—", "the ping reads in milliseconds");
 Check(PingWindow.Tint(79) != PingWindow.Tint(80) && PingWindow.Tint(149) != PingWindow.Tint(150) && PingWindow.Tint(null) != PingWindow.Tint(1), "the ping is coloured by how good it is");
 hub.OpenPets();
 hub.OpenMeter();
 Dispatcher.UIThread.RunJobs();
 Save(hub, "hub-launched.png");
-Check(Text(hub).Contains("Find a Pet") && Text(hub).Contains("Mini-map"), "a launched tool shows its buttons on its card");
+Check(Text(hub).Contains("Fight log") && Text(hub).Contains("Pet Tracker"), "the chosen tool shows its shortcut");
 Check(UpdateCheck.Newer("{\"tag_name\":\"v0.4.0\"}", "0.3.0") is { Version: "0.4.0", Page: "https://github.com/arnosantgaming-jpg/arno-a2-toolkit/releases/tag/v0.4.0" }, "a newer release is offered");
 Check(UpdateCheck.Newer("{\"tag_name\":\"v0.3.0\"}", "0.3.0") == null && UpdateCheck.Newer("{\"tag_name\":\"v0.2.9\"}", "0.3.0") == null, "the same or an older release is not offered");
 Check(UpdateCheck.Newer("{\"tag_name\":\"v1.0.0/../../evil\"}", "0.3.0") == null && UpdateCheck.Newer("{\"message\":\"Not Found\"}", "0.3.0") == null && UpdateCheck.Newer("[]", "0.3.0") == null && UpdateCheck.Newer("<html>", "0.3.0") == null, "odd answers are ignored");
@@ -195,7 +252,7 @@ Check(Text(hub).Contains("Background opacity"), "the meter's settings open in a 
 hub.ShowDrawer(HubWindow.MapDrawer);
 Thread.Sleep(400);
 Save(hub, "hub-map-drawer.png");
-Check(Text(hub).Contains("Open in Window") && Text(hub).Contains("Best spots"), "the map opens in a drawer");
+Check(Text(hub).Contains("Open in window") && Text(hub).Contains("Best spots"), "the map opens in a drawer");
 hub.ShowDrawer(HubWindow.FinderDrawer);
 Thread.Sleep(400);
 Save(hub, "hub-pets-drawer.png");
@@ -210,7 +267,7 @@ Check(Text(hub).Contains("Event Alerts") && Text(hub).Contains("Shugo Festival")
 hub.ShowDrawer(HubWindow.ResourceDrawer);
 Thread.Sleep(400);
 Save(hub, "hub-resource-drawer.png");
-Check(Text(hub).Contains("Resource Tracker Settings") && Text(hub).Contains("Shellfish") && Text(hub).Contains("Mini-map"), "the Resource Tracker's settings open in a drawer");
+Check(Text(hub).Contains("Resource Tracker") && Text(hub).Contains("Settings") && Text(hub).Contains("Shellfish"), "the Resource Tracker's settings open in a drawer");
 hub.ShowDrawer(HubWindow.ResourceMapDrawer);
 Thread.Sleep(400);
 Save(hub, "hub-resource-map.png");
@@ -220,11 +277,47 @@ Dispatcher.UIThread.RunJobs();
 hub.ShowDrawer(HubWindow.CubeDrawer);
 Thread.Sleep(400);
 Save(hub, "hub-cube-drawer.png");
-Check(Text(hub).Contains("Hidden Cube Tracker Settings") && Text(hub).Contains("Skip checked spots"), "the Hidden Cube Tracker's settings open in a drawer");
+Check(Text(hub).Contains("Hidden Cube Tracker") && Text(hub).Contains("Settings") && Text(hub).Contains("Skip checked spots"), "the Hidden Cube Tracker's settings open in a drawer");
 hub.ShowDrawer(HubWindow.CubeMapDrawer);
 Thread.Sleep(400);
 Save(hub, "hub-cube-map.png");
 Check(Text(hub).Contains("Best spots") && Text(hub).Contains("spots"), "the cube map opens in a drawer with ranked spots");
+{
+    var barsLook = new BarSettings();
+    int barsChanged = 0;
+    var barsPanel = new BarsSettingsPanel(barsLook, () => barsChanged++);
+    var barsHost = new Window { Width = 700, Height = 900, Content = barsPanel };
+    barsHost.Show();
+    Dispatcher.UIThread.RunJobs();
+    Check(Text(barsPanel).Contains("Crimson") && Text(barsPanel).Contains("Below 30 %") && Text(barsPanel).Contains("Stamina bar"), "the bars' settings are on their page");
+    barsHost.Close();
+    var gainsLook = new SessionLook { Columns = 3 };
+    var gainsPanel = new GainsSettingsPanel(gainsLook, () => { }, () => { });
+    var gainsHost = new Window { Width = 700, Height = 900, Content = gainsPanel };
+    gainsHost.Show();
+    Dispatcher.UIThread.RunJobs();
+    Check(Text(gainsPanel).Contains("Abyss Points") && Text(gainsPanel).Contains("Columns") && Text(gainsPanel).Contains("Reset session"), "Session Gains' settings are on their page");
+    gainsHost.Close();
+    var logPanel = new ItemLogSettingsPanel(new ItemLogLook(), () => { }, () => { });
+    var logHost = new Window { Width = 700, Height = 900, Content = logPanel };
+    logHost.Show();
+    Dispatcher.UIThread.RunJobs();
+    Check(Text(logPanel).Contains("Heroic") && Text(logPanel).Contains("Materials") && Text(logPanel).Contains("Clear log") && Text(logPanel).Contains("aion2data.com"), "the item log's settings are on their page");
+    logHost.Close();
+}
+
+hub.OpenSession();
+hub.OpenItemLog();
+hub.OpenBars();
+Dispatcher.UIThread.RunJobs();
+foreach (var (key, shows) in new[] { ("session", "Currencies"), ("itemlog", "Grades"), ("bars", "Stamina") })
+{
+    hub.ShowDrawer(key == "session" ? HubWindow.SessionGainsPage : key == "itemlog" ? HubWindow.ItemLogPage : HubWindow.BarsPage);
+    Thread.Sleep(300);
+    Save(hub, $"hub-{key}-settings.png");
+    Check(Text(hub).Contains(shows), $"the {key} overlay's settings open in the hub");
+}
+
 hub.Close();
 
 foreach (var key in ArnoA2.App.Map.WorldMaps.Order)
@@ -256,10 +349,8 @@ foreach (var kind in ArnoA2.App.Map.ResourceAtlas.Kinds.Select(k => k.Kind))
     resources.Choose(kind, true);
 Check(resources.Dots.Select(d => d.Shape).Distinct().Count() == 7, "each kind of resource has its marker shape");
 Check(petMap.Dots.All(d => d.Shape == MarkerShape.Paw), "pet spawns draw as paws");
-Check(maps.Mini.Active.All(l => l != resources), "launching a tool doesn't put it on the mini-map");
-if (maps.Mini.Active.Count == 0)
-    tracker.ToggleMiniMap();
-gather.ToggleMiniMap();
+Check(maps.Mini.Window == null && maps.Mini.Active.Contains(resources), "an open tool waits for the mini-map's switch");
+maps.Mini.Switch(true);
 gather.MiniMap!.StopCamera();
 Dispatcher.UIThread.RunJobs();
 Thread.Sleep(100);
@@ -270,6 +361,7 @@ gather.Close();
 Dispatcher.UIThread.RunJobs();
 Check(maps.Mini.Window == shared && maps.Mini.Active.Count == 1, "the mini-map stays for the tool still running");
 tracker.Close();
+maps.Mini.Switch(false);
 Dispatcher.UIThread.RunJobs();
 Check(gather.MiniMap == null && File.Exists(Path.Combine(data, "resource-settings.json")), "closing the tool closes its mini-map and saves");
 foreach (var (key, count) in new[] { ("verteron", 1440), ("altgard", 1371) })
@@ -306,16 +398,15 @@ Check(cubeMap.Dots.Count == ArnoA2.App.Map.CubeAtlas.Region("verteron").Count - 
 cubeMap.Preferences.ShowChecked = true;
 cubeMap.ClearChecked();
 Check(cubeMap.CheckedCount == 0, "checked spots can be forgotten");
-tracked.ToggleMiniMap();
-gathering.ToggleMiniMap();
-seek.ToggleMiniMap();
+maps.Mini.Switch(true);
 seek.MiniMap!.StopCamera();
 Dispatcher.UIThread.RunJobs();
 Thread.Sleep(100);
 Save(seek.MiniMap, "cube-minimap.png");
 Check(maps.Mini.Active.Select(l => l.Ring).SequenceEqual(new[] { 0, 1, 2 }), "all three tools share the mini-map, blue, green, purple");
-gathering.ToggleMiniMap();
-Check(maps.Mini.Active.Select(l => l.Ring).SequenceEqual(new[] { 0, 2 }), "a tool's Mini-map button takes it off again");
+gathering.Close();
+Dispatcher.UIThread.RunJobs();
+Check(maps.Mini.Active.Select(l => l.Ring).SequenceEqual(new[] { 0, 2 }) && maps.Mini.Window != null, "closing a tool takes its marks off the mini-map");
 seek.Close();
 gathering.Close();
 tracked.Close();
@@ -364,7 +455,7 @@ Check(reloaded.Preferences.Kinds.Count == ArnoA2.App.Map.ResourceAtlas.Kinds.Len
 var settings = new Window { Width = 500, Height = 720, Content = new ScrollViewer { Content = new StackPanel { Children = { new PetSettingsPanel(state, petMap), new ToolkitSettingsPanel(state) } } } };
 settings.Show();
 Save(settings, "settings.png");
-Check(Text(settings).Contains("Mini-map") && Text(settings).Contains("Capture"), "settings sections");
+Check(Text(settings).Contains("Capture"), "settings sections");
 
 maps.Preferences.MiniShape = "Round";
 tracker.ToggleMiniMap();
@@ -583,6 +674,25 @@ Check(Seen(0, "abyss").Region() == "abyss", "Abyss creatures before any zone mes
 Check(Seen(4242, "verteron").Region() == null, "Verteron creatures in another zone (an instance) do not move the map");
 Check(Seen(1110, "abyss").Region() == "altgard", "a known zone wins over the creatures");
 Check(Seen(20, "verteron").Region() == "abyss", "zone 20 is the Abyss, even with no creatures recognised");
+{
+    // The crowd's middle sits 50 m east of the player: once the exact place expires the
+    // estimate keeps that offset instead of sliding over to the crowd.
+    var still = new ArnoA2.App.Map.Positions();
+    still.Observe(new ZoneEntered(1110, 1000f, 1000f), 7, now);
+    for (int i = 0; i < 4; i++)
+        still.Observe(new EntityMoved(100 + i, 6000f + 300 * (i % 2), 1000f + 300 * (i / 2)), 7, now);
+    still.Observe(new PositionReport(7, 1000f, 1000f), 7, now);
+    Check(still.View(now) is { Exact: true, X: 1000f }, "an exact place is shown while fresh");
+    var later = now + ArnoA2.App.Map.Positions.FixTrust + TimeSpan.FromSeconds(1);
+    for (int i = 0; i < 4; i++)
+        still.Observe(new EntityMoved(100 + i, 6000f + 300 * (i % 2), 1000f + 300 * (i / 2)), 7, later);
+    Check(still.View(later) is { Exact: false, X: 1000f, Y: 1000f }, "after it expires, the player stays put rather than sliding to the crowd");
+    var walked = later + TimeSpan.FromSeconds(3);
+    for (int i = 0; i < 4; i++)
+        still.Observe(new EntityMoved(100 + i, 11000f + 300 * (i % 2), 1000f + 300 * (i / 2)), 7, walked);
+    Check(still.View(walked) is { X: > 2000f and < 6500f }, "and follows when the crowd moves with the player");
+}
+Check(!ArnoA2.App.Map.WorldMaps.All["altgard"].ReadsMinimap && ArnoA2.App.Map.WorldMaps.All["verteron"].ReadsMinimap, "the minimap is not matched on Altgard's tiles");
 // Entering it live: an unknown zone, then its creatures come into view.
 state.Positions.Observe(new ZoneEntered(4242, null, null), null, now);
 int abyssEntity = 900000;
@@ -715,6 +825,10 @@ Check(Math.Abs(centreX - 0.5) < 1e-9 && Math.Abs(centreY - 0.5) < 1e-9, "Abyss m
     Check(BarsWindow.Visibility(false, false, false, false, true, true) is > 0.1 and < 1 && BarsWindow.Visibility(false, false, true, true, true, true) < 0.1 && BarsWindow.Visibility(false, false, false, false, false, true) == 1, "idle dims only when chosen, and full fades further");
     Check(BarsWindow.Visibility(false, true, true, true, true, true) == 1, "the pointer brings faded bars back");
     Check(BarsWindow.Reading(30_790, 32_947, "Numbers") == "30,790 / 32,947" && BarsWindow.Reading(16_000, 32_000, "Percent") == "50 %" && BarsWindow.Reading(null, 0, "Numbers") == "", "bar readings");
+    Check(BarsWindow.Reading(30_790, 32_947, "Numbers", 12_309) == "30,790 / 32,947 + 12,309" && BarsWindow.Reading(30_790, 32_947, "None", 12_309) == "", "a shield's amount follows the HP reading");
+    Check(SessionWindow.Earned(1_470) == "+1,470" && SessionWindow.Earned(0) == "0" && SessionWindow.Earned(-96) == "−96" && SessionWindow.Rate(2_140) == "2.1k/h" && SessionWindow.Rate(850) == "850/h" && SessionWindow.Rate(null) == "—"
+        && SessionWindow.Elapsed(TimeSpan.FromSeconds(42)) == "0:42" && SessionWindow.Elapsed(new TimeSpan(1, 5, 9)) == "1:05:09", "session readings");
+    Check(BarsWindow.ShieldPart(0.5, 0.2) == (0.5, 0.2) && BarsWindow.ShieldPart(0.9, 0.3) is var (start, wide) && Math.Abs(start - 0.7) < 1e-9 && wide == 0.3, "the shield goes after your HP, or over its end when they don't both fit");
     Check(BarsWindow.Dimensions("Small") == (280, 15) && BarsWindow.Dimensions("odd") == (380, 19), "bar sizes");
 }
 

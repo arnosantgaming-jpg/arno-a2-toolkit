@@ -107,6 +107,58 @@ var t0 = DateTimeOffset.Parse("2026-10-24T12:00:00Z");
     Check(vital.ActiveAt == t0, "healing alone does not");
     vital.Data(1, Stat(4242, 1, (3, 96_800)), later);
     Check(vital.ActiveAt == later, "spending stamina does");
+
+    // Session gains: rises of a currency's total count, spending doesn't, and the first total
+    // only sets where it stands.
+    byte[] Bag(uint item, long count) => Frame(0x1B, 0x56, Cat(new byte[] { 1, 1, 0 }, BitConverter.GetBytes(147_319), new byte[] { 0, 0x97, 0, 0 }, BitConverter.GetBytes(item), BitConverter.GetBytes(count), new byte[18]));
+    var earning = new Engine(store: null, new Settings());
+    earning.Data(1, Cat(Bag(930_100_001, 1_301), Bag(930_100_001, 1_637), Bag(930_100_003, 2_233), Bag(930_100_003, 2_241)), t0);
+    Check(earning.Session.Gained(930_100_001) == 336 && earning.Session.Gained(930_100_003) == 8, "the session counts what each currency rose by");
+    earning.Data(1, Cat(Bag(930_100_001, 1_000), Bag(930_100_001, 1_100), Bag(533_460_001, 99_999)), t0);
+    Check(earning.Session.Gained(930_100_001) == 436, "spending doesn't take from what was earned, and other items aren't counted");
+    earning.Closed(1, t0);
+    earning.Data(2, Bag(930_100_001, 50_000), t0);
+    Check(earning.Session.Gained(930_100_001) == 436, "after reconnecting, the first total isn't a gain");
+    byte[] Rank(long total) => Frame(0x73, 0xE2, Cat(new byte[1], BitConverter.GetBytes(total)));
+    earning.Data(2, Cat(Rank(1_173_929), Rank(1_175_714), Rank(1_175_618)), t0);
+    Check(earning.Session.Gained(SessionGains.RankPoints) == 1_689, "Rank Points count a defeat's loss: 1,785 gained, 96 lost");
+    earning.Session.Restart(t0);
+    Check(earning.Session.Gained(930_100_001) == 0 && earning.Session.PerHour(930_100_001, t0.AddSeconds(30)) == null, "a new session starts from nothing");
+    earning.Data(2, Bag(930_100_001, 52_000), t0);
+    Check(earning.Session.PerHour(930_100_001, t0.AddMinutes(30)) == 4_000, "and gives a rate per hour after a minute");
+
+    // The item log: new stacks count in full, grown ones by how much, a stack seen for the first
+    // time only sets its count, and a stack moving (gone, then back) isn't obtained.
+    byte[] Slot(byte change, uint stack, uint item, long count) => Frame(0x1B, 0x56, Cat(new byte[] { 1, change, 0 }, BitConverter.GetBytes(stack), new byte[] { 0, 0x97, 0, 0 }, BitConverter.GetBytes(item), BitConverter.GetBytes(count), new byte[18]));
+    var looting = new Engine(store: null, new Settings());
+    looting.Data(1, Cat(Slot(0, 305_336, 610_660_027, 2), Slot(1, 900_965, 610_530_001, 16)), t0);
+    looting.Data(1, Slot(1, 900_965, 610_530_001, 19), t0.AddSeconds(10));
+    looting.Data(1, Slot(1, 848_690, 533_460_001, 31_971), t0.AddSeconds(20));
+    looting.Data(1, Slot(1, 848_690, 533_460_001, 31_970), t0.AddSeconds(21));
+    Check(looting.Items.Items is [{ Item: 610_530_001, Amount: 3 }, { Item: 610_660_027, Amount: 2 }], "the log has a new stack and a grown one, newest first, and nothing for a stack being used up");
+    looting.Data(1, Cat(Slot(1, 1_161_768, 930_100_031, 412_615), Slot(1, 1_161_768, 930_100_031, 412_956)), t0.AddSeconds(30));
+    looting.Data(1, Slot(1, 1_161_768, 930_100_031, 413_291), t0.AddSeconds(32));
+    Check(looting.Items.Items[0] is { Item: 930_100_031, Amount: 676 }, "Kinah from mobs a moment apart joins into one line");
+    looting.Data(1, Cat(Slot(2, 305_336, 610_660_027, 0), Slot(0, 305_999, 610_660_027, 2)), t0.AddSeconds(40));
+    looting.Data(1, Cat(Slot(2, 777_777, 610_610_014, 0), Slot(0, 777_778, 610_610_014, 5)), t0.AddSeconds(41));
+    Check(looting.Items.Items.Count == 3, "a stack moving to another slot, known or not, isn't obtained");
+    looting.Data(1, Slot(0, 888_888, 610_610_014, 1), t0.AddSeconds(50));
+    Check(looting.Items.Items[0] is { Item: 610_610_014, Amount: 1 }, "but a new one a while later is");
+
+    // Shields: cast with a size, then what is left after each hit, until the effect ends.
+    byte[] Absorb(int target, byte type, int effect, uint skill, params int[] values) => Frame(0x05, 0x38, Cat(Var(target), new[] { type }, Var(14620), Var(effect), BitConverter.GetBytes(skill * 100 + 41), values.SelectMany(Var).ToArray(), BitConverter.GetBytes(12_320_040u)));
+    byte[] Ended(int target, int effect) => Frame(0x2C, 0x38, Cat(Var(target), new byte[] { 1, 0 }, Var(effect), new byte[] { 1 }));
+    vital.Data(1, Absorb(4242, 0x09, 5853, 12_320_000, 19_884), later);
+    Check(vital.Own() is { Shield: 19_884 }, "a Nezekan's Shield on you counts its size");
+    vital.Data(1, Cat(Absorb(4242, 0x0B, 5853, 12_320_000, 12_309, 7_575), Absorb(4242, 0x09, 5860, 18_730_002, 1_391)), later);
+    Check(vital.Own() is { Shield: 13_700 }, "a hit leaves what is left, and two shields add up");
+    vital.Data(1, Cat(Absorb(4242, 0x09, 5870, 18_120_010, 1_805), Absorb(5000, 0x09, 5880, 12_320_000, 19_884)), later);
+    Check(vital.Own() is { Shield: 13_700 }, "a draining heal and someone else's shield are not yours");
+    vital.Data(1, Ended(4242, 5853), later);
+    Check(vital.Own() is { Shield: 1_391 }, "a shield that ends is gone");
+    Check(vital.Own() is { Shield: 1_391 }, "a shield whose end was missed stays a while");
+    vital.Data(1, Stat(4242, 2, (0, 31_000)), later.AddSeconds(31));
+    Check(vital.Own() is { Shield: 0 }, "and is dropped after 30 s");
 }
 
 // --- Settings ----------------------------------------------------------------------------

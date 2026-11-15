@@ -7,16 +7,17 @@ namespace ArnoA2.App.Map;
 /// The player's position for the live map, from decoded game messages. Units are game
 /// centimetres. The server reports the player's exact place only after skills, hits,
 /// effects and teleports; between those the trimmed middle of recently active nearby
-/// entities is used, held still while it stays within its error band and eased toward
+/// entities is used, shifted by how far it was from the last exact place (the crowd is rarely
+/// centred on the player), held still while it stays within its error band and eased toward
 /// otherwise. Pet creatures in view are kept with their places for the map.
 /// </summary>
 public sealed class Positions
 {
     public static readonly TimeSpan FixTrust = TimeSpan.FromSeconds(4);
-    const double AroundSeconds = 5, SmoothSeconds = 1.5, MaxSpeed = 1500, HoldRadius = 1800;
+    const double AroundSeconds = 5, SmoothSeconds = 1.5, MaxSpeed = 1500, HoldRadius = 1800, OffsetSeconds = 60;
     readonly Dictionary<int, (float X, float Y, DateTimeOffset At)> around = new();
     readonly Dictionary<int, LiveMob> mobs = new();
-    (float X, float Y, DateTimeOffset At)? fix, smooth;
+    (float X, float Y, DateTimeOffset At)? fix, smooth, offset;
     string? detected;
 
     public int Zone { get; private set; }
@@ -28,7 +29,7 @@ public sealed class Positions
     {
         around.Clear();
         mobs.Clear();
-        fix = smooth = null;
+        fix = smooth = offset = null;
     }
 
     /// <param name="local">The player's entity, when known.</param>
@@ -108,10 +109,16 @@ public sealed class Positions
         if (fix is { } f && now - f.At <= FixTrust)
         {
             smooth = (f.X, f.Y, now);
+            if (Around(now, AroundSeconds) is { } centre)
+                offset = (f.X - centre.X, f.Y - centre.Y, f.At);
             return (f.X, f.Y, f.At, true);
         }
 
         var guess = Around(now, AroundSeconds) ?? Around(now, 4 * AroundSeconds);
+        // Without this the estimate slides to the crowd's middle, tens of metres off, as each
+        // exact place expires, and snaps back with the next one.
+        if (guess is { } c && offset is { } o && (now - o.At).TotalSeconds <= OffsetSeconds)
+            guess = (c.X + o.X, c.Y + o.Y);
         // An estimate further from the last exact place than the player could have run since is not taken.
         if (guess is { } g && (fix is not { } last || Distance(g.X, g.Y, last.X, last.Y) <= 3000 + 1000 * Math.Min((now - last.At).TotalSeconds, 12)))
         {

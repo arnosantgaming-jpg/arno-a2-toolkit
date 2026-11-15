@@ -49,7 +49,6 @@ public sealed class PetSettingsPanel : UserControl
         }));
         panel.Children.Add(Ui.Note("Lower opacity lets the game show through, and fades the pet with it."));
 
-        MiniMapSettings.Add(panel, layer.Hub);
 
         panel.Children.Add(Ui.Heading("Learned spawns"));
         var learned = Ui.Note("");
@@ -201,7 +200,8 @@ public sealed class AboutPanel : UserControl
                 Ui.Note($"Data: {Path.GetDirectoryName(app.Store.Folder)}"),
                 Ui.Toggle("Check for updates at start", checkUpdates, setCheckUpdates),
                 Ui.Note("Asks GitHub for the newest version number. Nothing about you or your game is sent, and an update only happens when you click it."),
-                Ui.Note("Arno's A2 Toolkit is unofficial and not affiliated with NCSOFT; using third-party tools can put your account at risk. Message formats and data: 0Fox2Give/PetTracker and SkeeveAN/Aion-DPS-Meter. GPL-3.0.")
+                Ui.Note("Arno's A2 Toolkit is unofficial and not affiliated with NCSOFT; using third-party tools can put your account at risk. Message formats and data: 0Fox2Give/PetTracker and SkeeveAN/Aion-DPS-Meter. GPL-3.0."),
+                Ui.Note("Item names, grades and types in the item log: " + ItemTable.SourcePage + ". Game data © NCSOFT.")
             }
         };
     }

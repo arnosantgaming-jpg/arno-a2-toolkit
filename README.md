@@ -11,17 +11,28 @@ passive capture program:
   with a sound and an on-screen alert when the game reports a cube (still being tested: it may
   only fire once a cube is being opened). Turn it off in the tool's settings. On KDE the toolkit adds its window rules once, so overlays stay above the game.
 
-All tools share one mini-map: a tool's Mini-map button adds its ring and markers. **Server
-Ping** in the Tools Overlay panel adds a small always-on-top ping readout you can drag anywhere. **Event
-Alerts** in the side menu warns you a few minutes before the Shugo Festival, the Air Raid and the
+The main window lists every tool with its switch; pick one to see what it's doing and its settings,
+grouped in cards. **Mini-map** has its own switch: while it's on, each open map tool (pets, resources,
+cubes) adds its ring and markers to it. **Server Ping** adds a small always-on-top ping readout you can
+drag anywhere. **Session
+Gains** adds one for the Kinah, bound Kinah, Abyss Points and Rank Points (net of what a defeat costs)
+you've earned since it started, in all and per hour, each in its own colour; its page in the main window
+picks which ones show, the text size and how many columns, and starts a new session. **Item
+Log** lists the items you obtain, newest on top and in their grade's colour, apart from chat; its page
+filters by grade and type, sets how many lines show, or clears it. Right-click either overlay for a
+shortcut to its settings. Item names come from
+[aion2data.com](https://aion2data.com). **Event
+Alerts** in the side menu warns you a few minutes before the Shugo Festival, the Dimensional
+Invasion (an Air Raid or one of its two other kinds, picked at random by the game) and the
 Spacetime Rift, each switched on separately. Its times come from the published schedule, so after
 maintenance the game's own Event menu is the one to trust.
 
-**HP and Mana** in the Tools Overlay panel adds wide HP, mana and stamina bars you can drag
-anywhere, with a pale strip that shows how much a hit took. The game sends each value only when it
+**HP and Mana** adds wide HP, mana and stamina bars you can drag
+anywhere, with a pale strip that shows how much a hit took and a blue part for a shield on you
+(such as a Templar's Nezekan's Shield), with what it has left. The game sends each value only when it
 changes, so a bar is blank until its first change. They dim when you've done nothing for a moment;
-right-click them for size, colours and text. On KDE, System Settings → Shortcuts can give **Show or
-hide HP bars** a key. With **Hide in game menus** on (Quick Settings), every overlay but alerts
+their page in the main window sets size, colours and text. On KDE, System Settings → Shortcuts can give **Show or
+hide HP bars** a key. With **Hide in game menus** on (Settings), every overlay but alerts
 steps aside while a game menu is open, seen from the close X or back arrow in the game's top-right
 corner, and lets clicks through to the game while hidden. With **Only while in game** on, overlays
 wait until the toolkit sees your character. Both were tested on Linux only so far.

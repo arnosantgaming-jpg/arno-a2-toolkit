@@ -74,6 +74,13 @@ public sealed class MinimapTracker : IDisposable
     {
         if (seed is not { } s || !WorldMaps.All.TryGetValue(s.Region, out var map))
             return;
+        if (!map.ReadsMinimap)
+        {
+            last = null;
+            Post(null, "Minimap not read on this map");
+            return;
+        }
+
         if (capture.Size == null && !capture.Find())
         {
             Post(null, "Game window not found");

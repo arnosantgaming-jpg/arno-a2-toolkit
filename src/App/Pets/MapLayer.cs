@@ -7,8 +7,9 @@ namespace ArnoA2.App;
 /// <param name="Learned">Picked up from play, not from the bundled data: drawn with a white edge.</param>
 public sealed record MapDot(double X, double Y, IBrush Brush, MarkerShape Shape = MarkerShape.Dot, bool Learned = false);
 
-/// <summary>The one mini-map every tool shares: a tool's Mini-map button adds its ring and its
-/// marks, or takes them off again. It closes with the last tool on it.</summary>
+/// <summary>The one mini-map every tool shares. It has its own switch; while it's on, each map
+/// tool that's open adds its ring and marks, and takes them off when it closes. With no map tool
+/// open it waits, so there's always something of a tool's to show.</summary>
 public sealed class SharedMiniMap
 {
     readonly MapHub hub;
@@ -18,16 +19,35 @@ public sealed class SharedMiniMap
 
     public MiniMapWindow? Window { get; private set; }
     public IReadOnlyList<MapLayer> Active => active;
+    /// <summary>The mini-map's switch, remembered between starts.</summary>
+    public bool On => hub.Preferences.MiniMap;
+
+    public void Switch(bool on)
+    {
+        hub.Preferences.MiniMap = on;
+        hub.Save();
+        Sync();
+    }
+
+    /// <summary>A map tool opened: its marks go on the mini-map while it's on.</summary>
+    public void Join(MapLayer layer)
+    {
+        if (!active.Contains(layer))
+        {
+            active.Add(layer);
+            active.Sort((a, b) => a.Ring.CompareTo(b.Ring));
+        }
+
+        Sync();
+    }
 
     public void Leave(MapLayer layer)
     {
         active.Remove(layer);
-        if (active.Count == 0)
-            Window?.Close();
-        else
-            Window?.SetLayers(active.ToArray());
+        Sync();
     }
 
+    /// <summary>Adds the tool or takes it off again, turning the mini-map on to show it.</summary>
     public void Toggle(MapLayer layer)
     {
         if (active.Contains(layer))
@@ -36,21 +56,37 @@ public sealed class SharedMiniMap
             return;
         }
 
-        active.Add(layer);
-        active.Sort((a, b) => a.Ring.CompareTo(b.Ring));
+        hub.Preferences.MiniMap = true;
+        Join(layer);
+    }
+
+    void Sync()
+    {
+        if (!On || active.Count == 0)
+        {
+            var shown = Window;
+            Window = null;
+            shown?.Close();
+            return;
+        }
+
         if (Window != null)
         {
             Window.SetLayers(active.ToArray());
             return;
         }
 
-        Window = new MiniMapWindow(hub, active.ToArray());
-        Window.Closed += (_, _) =>
+        var window = Window = new MiniMapWindow(hub, active.ToArray());
+        // Closed from the mini-map itself: that's the switch going off.
+        window.Closed += (_, _) =>
         {
+            if (Window != window)
+                return;
             Window = null;
-            active.Clear();
+            hub.Preferences.MiniMap = false;
+            hub.Save();
         };
-        Window.Show();
+        window.Show();
     }
 }
 

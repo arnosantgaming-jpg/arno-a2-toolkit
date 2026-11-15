@@ -166,8 +166,24 @@ List<Frame> Split(params byte[][] chunks)
     static byte[] FromHex(string hex) => Convert.FromHexString(hex);
     Check(Decode(0x05, 0x38, FromHex("812A0ABDD1019002BB12270733329312" + "00")) is SkillHits { Hits: [{ Actor: 26813, Target: 5377, Damage: 51, Skill: 1_200_012, Dot: true, Crit: false }] }, "a burn tick is damage over time");
     Check(Decode(0x05, 0x38, FromHex("F3B7020EA17B020854D6514D01C3414A07D780D100")) is SkillHits { Hits: [{ Actor: 15777, Damage: 77, Skill: 13_730_007, Dot: true }] }, "a tick into a shield still counts");
-    Check(Decode(0x05, 0x38, FromHex("812A09BDD1019002BB12270733329312" + "00")) == null, "a healing tick is no damage");
+    Check(Decode(0x05, 0x38, FromHex("812A09BDD1019002BB12270733329312" + "00")) is not SkillHits, "a healing tick is no damage");
     Check(Decode(0x05, 0x38, FromHex("812A0A812A9002BB12270733329312" + "00")) == null, "a tick on oneself is no damage");
+    Check(Decode(0x05, 0x38, FromHex("E404099C72DD2D29D46E49AC9B0128FDBB00")) is ShieldChanged { Target: 612, Effect: 5853, Skill: 12_320_000, Remaining: 19_884 }, "a shield's size when cast");
+    Check(Decode(0x05, 0x38, FromHex("E4040BBDBB04DD2D29D46E499560973B28FDBB00")) is ShieldChanged { Target: 612, Effect: 5853, Remaining: 12_309 }, "what a shield has left after a hit");
+    Check(Decode(0x05, 0x38, FromHex("E4040BBDBB04DD2D29D46E499560973B28FDBB0000")) is not ShieldChanged, "a shield record that doesn't end where it should is not one");
+    Check(Decode(0x1B, 0x56, FromHex("010100773F020000970000213370371505000000000000013A000000000000000000000000000B0000")) is BagChanged { Slots: [{ Item: 930_100_001, Count: 1_301 }] }, "bound Kinah's new total");
+    Check(Decode(0x1B, 0x56, FromHex("010100A64F09000066000023337037670D0000000000000101000000000000000000000000000B0000")) is BagChanged { Slots: [{ Item: 930_100_003, Count: 3_431 }] }, "Abyss Points' new total");
+    Check(Decode(0x1B, 0x56, FromHex("020200DA210200009A0000F1D2C31E0000000000000000012D00000000000000000000000000000E00010094E10600008000003F3370373CF40F000000000001000000000000000000000000004C0000"))
+        is BagChanged { Slots: [{ Item: 516_150_001, Count: 0 }, { Item: 930_100_031, Count: 1_045_564 }] }, "a sale's settlement: the item leaves and Kinah rises, in one message");
+    Check(Decode(0x1B, 0x56, FromHex("010100A64F09000066000023337037670D00000000000001010000000000")) == null, "a bag record cut short is not read");
+    Check(Decode(0x1B, 0x56, FromHex("010000B8A80400003C0200BBEE65240200000000000000010A00000000000000000000000000290000")) is BagChanged { Slots: [{ Item: 610_660_027, Count: 2, Change: BagChange.New, Stack: 305_336 }] }, "a new stack and its id");
+    Check(Decode(0x1B, 0x56, FromHex("01000185A5110000E3010037ADDB060100000000000000012E000000000842656971696F6E6700000000000000000000000000000000000000000000120000000001000000000000000000000000000000000300000000000000000000000000000000000000001D0000"))
+        is BagChanged { Slots: [{ Item: 115_060_023, Count: 1, Change: BagChange.New }] }, "a crafted piece of gear, with its crafter's name");
+    Check(Decode(0x1B, 0x56, FromHex("0401000F7C0E0000390200D11F952501000000000000000F2500000000000000000000000000000400010065BF0D00005802000BD9662410000000000000000F1C000000000000000000000000000400010042160D00001B02005D2B652448000000000000000F3A000000000000000000000000000400020058190D0000A00200F1B166240000000000000000012F000000000000000000000000000400"))
+        is BagChanged { Slots: [{ Count: 1, Change: BagChange.Changed }, { Count: 16 }, { Count: 72 }, { Item: 610_710_001, Count: 0, Change: BagChange.Gone, Stack: 858_456 }] }, "four slots, the first a byte longer");
+    Check(Decode(0x73, 0xE2, FromHex("00B7EE110000000000")) is RankPoints { Total: 1_175_223 }, "the Rank Points total");
+    Check(Decode(0x2C, 0x38, FromHex("E4040100DD2D01")) is EffectsEnded { Target: 612, Effects: [5853] }, "an effect ends");
+    Check(Decode(0x2C, 0x38, FromHex("E4040200DD2D0100D7330107")) is EffectsEnded { Effects: [5853, 6615] }, "several effects end at once");
 
     // HP: live records anywhere in a frame, the HP update and the spawn's HP.
     byte[] Live(int entity, int hp, byte kind = 2) => Cat(new byte[] { 0x8D }, Var(entity), new byte[] { kind, 1, (byte)(kind == 2 ? 0 : 1) }, BitConverter.GetBytes(hp), new byte[4]);

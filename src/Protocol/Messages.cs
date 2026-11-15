@@ -52,6 +52,32 @@ public sealed record EntityMoved(int Entity, float X, float Y) : Message;
 /// <summary>2A:38 / 2B:38 — an effect was applied; the caster's position is attached.</summary>
 public sealed record EffectCast(int Target, int Caster, float X, float Y) : Message;
 
+/// <summary>05:38 — what is left of an absorbing effect on a target (a shield, or a heal
+/// that drains in ticks): its size when cast, then after each hit it takes.</summary>
+/// <param name="Effect">This casting's id, which ends with it.</param>
+public sealed record ShieldChanged(int Target, int Effect, uint Skill, int Remaining) : Message;
+
+/// <summary>2C:38 — effects on a target ended: broken, run out or removed.</summary>
+public sealed record EffectsEnded(int Target, IReadOnlyList<int> Effects) : Message;
+
+/// <summary>1B:56 — stacks in your bag have new counts. Kinah, bound Kinah and Abyss Points are
+/// kept as stacks, so their totals come this way.</summary>
+public sealed record BagChanged(IReadOnlyList<BagSlot> Slots) : Message;
+
+/// <summary>An item and how many of it the stack now holds (0 when it left the bag), what
+/// happened to the stack and the stack's own id.</summary>
+public sealed record BagSlot(uint Item, long Count, BagChange Change = BagChange.Changed, uint Stack = 0);
+
+public enum BagChange : byte
+{
+    New = 0,
+    Changed = 1,
+    Gone = 2
+}
+
+/// <summary>73:E2 — your Rank Points total, after a gain or a loss (a defeat costs some).</summary>
+public sealed record RankPoints(long Total) : Message;
+
 /// <summary>One player skill's damage to one target.</summary>
 /// <param name="Power">The actor's attack power, which a summon shares with its owner.</param>
 /// <param name="Dot">A tick of damage over time rather than a hit.</param>
@@ -104,7 +130,10 @@ public static class MessageDecoder
             (0x2A or 0x2B, 0x38) => Effect(body, renewed: frame.Op == 0x2B),
             (0x04, 0x38) => Hits(body),
             (0x1B, 0x92) => Health(body),
-            (0x05, 0x38) => Tick(body),
+            (0x05, 0x38) => Shield(body) ?? Tick(body),
+            (0x2C, 0x38) => Ended(body),
+            (0x1B, 0x56) => Bag(body),
+            (0x73, 0xE2) => body.Length == 9 && body[0] == 0 && BitConverter.ToInt64(body[1..]) is >= 0 and < 1_000_000_000_000 and var total ? new RankPoints(total) : null,
             (0x00, 0x8D) => Stats(body),
             (0x44, 0x37) or (0x4A, 0x36) => Hint(body),
             (0x91, 0x56) => Merchant(body, now),
@@ -491,6 +520,78 @@ public static class MessageDecoder
             return null;
         uint skill = raw / 100;
         return skill is >= 1 and < 300_000_000 && damage is > 0 and < 100_000_000 ? new SkillHits([new SkillHit(actor, target, damage, skill, Dot: true)]) : null;
+    }
+
+    // A tick's layout with type 09 (cast: the size, the actor is the caster) or 0B (a hit:
+    // what is left, then what it took): target, type, actor, effect id, the skill times 100
+    // as a u32, the value(s), then a u32.
+    static Message? Shield(ReadOnlySpan<byte> body)
+    {
+        var r = new Reader(body);
+        if (!r.VarInt(out int target) || target is < 1 or > 10_000_000 || !r.Byte(out byte type) || type is not (0x09 or 0x0B)
+            || !r.VarInt(out int actor) || actor < 1 || !r.VarInt(out int effect) || effect < 1 || !r.U32(out uint raw) || !r.VarInt(out int left) || left < 0
+            || type == 0x0B && !r.VarInt(out _) || r.Remaining != 4)
+            return null;
+        uint skill = raw / 100;
+        return skill is >= 1 and < 300_000_000 ? new ShieldChanged(target, effect, skill, left) : null;
+    }
+
+    // target:varint count:u8, then per effect 00 id:varint reason:u8. Other entry kinds (07)
+    // are laid out differently, so reading stops at one.
+    static Message? Ended(ReadOnlySpan<byte> body)
+    {
+        var r = new Reader(body);
+        if (!r.VarInt(out int target) || target is < 1 or > 10_000_000 || !r.Byte(out byte count))
+            return null;
+        var ended = new List<int>();
+        for (int i = 0; i < count && r.Byte(out byte kind) && kind == 0; i++)
+        {
+            if (!r.VarInt(out int effect) || effect < 1 || !r.Skip(1))
+                return null;
+            ended.Add(effect);
+        }
+
+        return ended.Count > 0 ? new EffectsEnded(target, ended) : null;
+    }
+
+    // count:u8, then the slots: a change kind (01 changed, 00 new, 02 gone), 00 (01 for gear), the stack's id
+    // as a u32, three bytes, 00, the item as a u32, the count as a u64, and more. That more is
+    // usually 17 or 18 bytes, but gear carries its crafter's name and other details, so the next
+    // slot is found by its shape rather than at a fixed step.
+    const int BagSlotMin = 39, BagSlotMax = 200;
+
+    static Message? Bag(ReadOnlySpan<byte> body)
+    {
+        if (body.Length < 1 || body[0] is < 1 or > 20)
+            return null;
+        var slots = new List<BagSlot>();
+        int at = 1;
+        for (int i = 0; i < body[0]; i++)
+        {
+            if (BagSlotAt(body, at) is not { } slot)
+                return null;
+            slots.Add(slot);
+            if (i == body[0] - 1)
+                return body.Length - at <= BagSlotMax ? new BagChanged(slots) : null;
+            int next = at + BagSlotMin;
+            while (next <= at + BagSlotMax && BagSlotAt(body, next) == null)
+                next++;
+            at = next;
+        }
+
+        return null;
+    }
+
+    static BagSlot? BagSlotAt(ReadOnlySpan<byte> body, int at)
+    {
+        if (at + BagSlotMin > body.Length)
+            return null;
+        var slot = body[at..];
+        uint item = BitConverter.ToUInt32(slot[10..]);
+        long count = BitConverter.ToInt64(slot[14..]);
+        if (slot[0] > 2 || slot[1] > 1 || slot[9] != 0 || item is < 100_000_000 or >= 1_000_000_000 || count is < 0 or >= 1_000_000_000_000)
+            return null;
+        return new BagSlot(item, count, (BagChange)slot[0], BitConverter.ToUInt32(slot[2..]));
     }
 
     // What follows the damage. Layout 4 has a small field (a spirit's has none), bit 0x20

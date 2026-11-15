@@ -32,7 +32,7 @@ public sealed class AlertWindow : Window
             CornerRadius = new CornerRadius(6),
             BorderThickness = new Thickness(1.5),
             BorderBrush = new SolidColorBrush(accent),
-            Background = new SolidColorBrush(Color.Parse("#05070D"), 0.88),
+            Background = Brush.Parse("#E0080D16"),
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = text, FontSize = 17, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center }
         };

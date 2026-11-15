@@ -20,6 +20,8 @@ public sealed class MiniMapWindow : Window
 {
     public const double Frame = 4, Footer = 30, FullSize = 300;
     const double RingGap = 2.5;
+    // Seconds a camera direction is kept while the cone goes unread.
+    const double HeadingHold = 10;
     IReadOnlyList<MapLayer> layers;
     readonly MapHub hub;
     readonly MapCanvas canvas;
@@ -250,18 +252,25 @@ public sealed class MiniMapWindow : Window
     }
 
     /// <summary>Reads your camera direction from the game's minimap while the mini-map is open,
-    /// and eases the shown direction toward each reading every frame, so turning is smooth.</summary>
+    /// and eases the shown direction toward each reading every frame, so turning is smooth.
+    /// The cone often goes unread for a moment (the Abyss's pale void, icons over it): the
+    /// shown direction is held through that rather than snapping north up and back.</summary>
     void FollowCamera()
     {
         camera = new CameraHeading();
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        double last = 0;
+        double last = 0, readAt = 0;
         string? status = null;
         ticking = Avalonia.Threading.DispatcherTimer.Run(() =>
         {
             double now = clock.Elapsed.TotalSeconds, dt = now - last;
             last = now;
-            double? shown = canvas.Heading, next = CameraHeading.Ease(shown, camera?.Degrees, dt);
+            double? shown = canvas.Heading, reading = camera?.Degrees;
+            if (reading != null)
+                readAt = now;
+            else if (now - readAt < HeadingHold)
+                reading = shown;
+            double? next = CameraHeading.Ease(shown, reading, dt);
             if (camera?.Status != status)
             {
                 status = camera?.Status;

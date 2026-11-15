@@ -9,13 +9,24 @@ namespace ArnoA2.App;
 /// <summary>The colours of a tool's maps. Spot marks the ranked farming spots.</summary>
 public sealed record ToolColors(Color Accent, Color Bright, Color Window, Color Panel, Color Line, Color Muted, Color Spot);
 
+/// <summary>The hub's dark navy palette, shared with the overlays.</summary>
+public static class Navy
+{
+    public static readonly IBrush Background = Brush.Parse("#080D16"), Sidebar = Brush.Parse("#0B111D"), Surface1 = Brush.Parse("#101A29"), Surface2 = Brush.Parse("#152236"), Surface3 = Brush.Parse("#1C2B40"),
+        Line = Brush.Parse("#26364C"), LineStrong = Brush.Parse("#3A5270"), Text = Brush.Parse("#E8EEF7"), Text2 = Brush.Parse("#A8B7CA"), Muted = Brush.Parse("#71839A"),
+        Accent = Brush.Parse("#339DFF"), Success = Brush.Parse("#29D391"), Warning = Brush.Parse("#F2B94B"), Danger = Brush.Parse("#F05B65"), Track = Brush.Parse("#25364B");
+    public static readonly Color AccentColor = Color.Parse("#339DFF");
+    /// <summary>The overlays' face: near-black at 72 %, a faint rim.</summary>
+    public static readonly IBrush Overlay = Brush.Parse("#B8080D16"), OverlayRim = Brush.Parse("#663A5270"), OverlayText = Brush.Parse("#F0F4FA"), OverlayText2 = Brush.Parse("#B6C3D3");
+}
+
 /// <summary>Each tool's colour, the one its launcher card wears, and the frame its windows share.</summary>
 public static class ToolTheme
 {
-    public static readonly Color Pets = Color.Parse("#2E8CFF"), Meter = Color.Parse("#FF4048"), Resources = Color.Parse("#22C878"), Cubes = Color.Parse("#9A4DFF"), Toolkit = Color.Parse("#6CC0FF");
-    public static readonly ToolColors PetColors = new(Pets, Color.Parse("#6CC0FF"), Color.Parse("#060E1C"), Color.Parse("#0A1424"), Color.Parse("#1F3A5C"), Color.Parse("#8FA6C2"), Color.Parse("#FFD54F"));
-    public static readonly ToolColors CubeColors = new(Cubes, Color.Parse("#C79BFF"), Color.Parse("#0E0818"), Color.Parse("#160D26"), Color.Parse("#3A2560"), Color.Parse("#A99BC4"), Color.Parse("#C79BFF"));
-    public static readonly ToolColors ResourceColors = new(Resources, Color.Parse("#6FE8AE"), Color.Parse("#06140F"), Color.Parse("#0A1E17"), Color.Parse("#1B4A36"), Color.Parse("#8FB5A4"), Color.Parse("#6FE8AE"));
+    public static readonly Color Pets = Color.Parse("#339DFF"), Meter = Color.Parse("#FF5968"), Resources = Color.Parse("#29D391"), Cubes = Color.Parse("#B879FF"), Toolkit = Color.Parse("#65BFFF");
+    public static readonly ToolColors PetColors = new(Pets, Color.Parse("#65BFFF"), Color.Parse("#080D16"), Color.Parse("#101A29"), Color.Parse("#26364C"), Color.Parse("#8A9BB0"), Color.Parse("#FFD54F"));
+    public static readonly ToolColors CubeColors = new(Cubes, Color.Parse("#D2A8FF"), Color.Parse("#080D16"), Color.Parse("#101A29"), Color.Parse("#26364C"), Color.Parse("#8A9BB0"), Color.Parse("#C79BFF"));
+    public static readonly ToolColors ResourceColors = new(Resources, Color.Parse("#6FE8AE"), Color.Parse("#080D16"), Color.Parse("#101A29"), Color.Parse("#26364C"), Color.Parse("#8A9BB0"), Color.Parse("#6FE8AE"));
 
     static readonly Lazy<WindowIcon?> Logo = new(() => File.Exists(Path.Combine(AppContext.BaseDirectory, "icon.png")) ? new WindowIcon(Path.Combine(AppContext.BaseDirectory, "icon.png")) : null);
 
@@ -36,7 +47,9 @@ public static class ToolTheme
     public static void Frame(Window window, string label, Color accent, Control content, IBrush background, IBrush line)
     {
         window.WindowDecorations = WindowDecorations.None;
-        window.Background = background;
+        // See-through window, rounded face: the same look as the small overlays.
+        window.TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
+        window.Background = Brushes.Transparent;
         Tint(window, accent);
         var tint = new SolidColorBrush(accent);
         var close = new Border { Padding = new Thickness(8, 2), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "✕", FontSize = 12, Foreground = tint } };
@@ -65,6 +78,6 @@ public static class ToolTheme
 
         DockPanel.SetDock(strip, Dock.Top);
         var layout = new DockPanel { Children = { strip, content } };
-        window.Content = new Border { BorderBrush = line, BorderThickness = new Thickness(1), Child = new Panel { Children = { layout, grip } } };
+        window.Content = new Border { Background = background, CornerRadius = new CornerRadius(8), BorderBrush = Navy.OverlayRim, BorderThickness = new Thickness(1), ClipToBounds = true, Child = new Panel { Children = { layout, grip } } };
     }
 }

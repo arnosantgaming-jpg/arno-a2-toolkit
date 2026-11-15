@@ -20,6 +20,7 @@
     <EmbeddedResource Include="../../data/FarmingSpawns.json" LogicalName="spawns.json" />
     <EmbeddedResource Include="../../data/ResourceNodes.json" LogicalName="resources.json" />
     <EmbeddedResource Include="../../data/CubeSpots.json" LogicalName="cubes.json" />
+    <EmbeddedResource Include="../../data/Items.tsv" LogicalName="items.tsv" />
     <EmbeddedResource Include="Phone/phone.html" LogicalName="phone.html" />
     <EmbeddedResource Include="Phone/keep-awake.mp4" LogicalName="keep-awake.mp4" />
     <Content Include="../../assets/classes/*.png" Link="classes/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

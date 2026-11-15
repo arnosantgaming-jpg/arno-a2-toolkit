@@ -10,15 +10,15 @@ namespace ArnoA2.App.Dps;
 
 public static class Ui
 {
-    public static readonly Color Backdrop = Color.Parse("#140406");
+    public static readonly Color Backdrop = Color.Parse("#080D16");
     public static readonly IBrush Window = new SolidColorBrush(Backdrop);
-    public static readonly IBrush Panel = Brush.Parse("#1C080B");
-    public static readonly IBrush Line = Brush.Parse("#4A1A20");
-    public static readonly IBrush Accent = Brush.Parse("#FF5A60");
-    public static readonly IBrush Title = Brush.Parse("#FFE8E8");
-    public static readonly IBrush Rate = Brush.Parse("#FFD2D2");
-    public static readonly IBrush Muted = Brush.Parse("#B8959A");
-    public static readonly IBrush Track = Brush.Parse("#351519");
+    public static readonly IBrush Panel = Brush.Parse("#101A29");
+    public static readonly IBrush Line = Brush.Parse("#26364C");
+    public static readonly IBrush Accent = Brush.Parse("#FF5968");
+    public static readonly IBrush Title = Brush.Parse("#E8EEF7");
+    public static readonly IBrush Rate = Brush.Parse("#D6DFEA");
+    public static readonly IBrush Muted = Brush.Parse("#8A9BB0");
+    public static readonly IBrush Track = Brush.Parse("#1C2B40");
     /// <summary>A row whose class is not known yet.</summary>
     public static readonly Color NoClass = Color.Parse("#6B7A8C");
 
@@ -143,6 +143,6 @@ public static class Ui
         return bar;
     }
 
-    public static TextBlock Heading(string text, double size = 18) => new() { Text = text, FontSize = size, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 2) };
+    public static TextBlock Heading(string text, double size = 18) => new() { Text = text, FontSize = size, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 2), Classes = { "heading" } };
     public static TextBlock Note(string text) => new() { Text = text, FontSize = 11.5, Foreground = Muted, TextWrapping = TextWrapping.Wrap };
 }

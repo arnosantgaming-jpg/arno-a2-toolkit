@@ -10,16 +10,16 @@ namespace ArnoA2.App;
 /// <summary>Colours and small builders shared by the windows.</summary>
 public static class Ui
 {
-    public static readonly IBrush Window = Brush.Parse("#060E1C");
-    public static readonly IBrush Panel = Brush.Parse("#0C1A2E");
-    public static readonly IBrush Line = Brush.Parse("#1F3A5C");
-    public static readonly IBrush Accent = Brush.Parse("#2E8CFF");
-    public static readonly IBrush Bright = Brush.Parse("#6CC0FF");
-    public static readonly IBrush Muted = Brush.Parse("#8FA6C2");
-    public static readonly IBrush Good = Brush.Parse("#81C784");
-    public static readonly IBrush Track = Brush.Parse("#1E2E44");
+    public static readonly IBrush Window = Brush.Parse("#080D16");
+    public static readonly IBrush Panel = Brush.Parse("#101A29");
+    public static readonly IBrush Line = Brush.Parse("#26364C");
+    public static readonly IBrush Accent = Brush.Parse("#339DFF");
+    public static readonly IBrush Bright = Brush.Parse("#65BFFF");
+    public static readonly IBrush Muted = Brush.Parse("#8A9BB0");
+    public static readonly IBrush Good = Brush.Parse("#29D391");
+    public static readonly IBrush Track = Brush.Parse("#1C2B40");
 
-    public static readonly Color Backdrop = Color.Parse("#060E1C");
+    public static readonly Color Backdrop = Color.Parse("#080D16");
 
     public static Border Flat(string label, Action action, string? tip = null) => Dps.Ui.Flat(label, action, tip, Line, Muted);
 
@@ -34,7 +34,7 @@ public static class Ui
         return button;
     }
 
-    public static TextBlock Heading(string text, double size = 18) => new() { Text = text, FontSize = size, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 2) };
+    public static TextBlock Heading(string text, double size = 18) => new() { Text = text, FontSize = size, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 2), Classes = { "heading" } };
     public static TextBlock Note(string text) => new() { Text = text, FontSize = 11.5, Foreground = Muted, TextWrapping = TextWrapping.Wrap };
 
     public static Control Toggle(string label, bool value, Action<bool> changed)

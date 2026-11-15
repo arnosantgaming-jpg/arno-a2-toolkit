@@ -18,9 +18,11 @@ public sealed record TargetHealth(string Name, int Hp, int MaxHp)
 }
 
 /// <summary>Your own HP, mana and stamina. A maximum the game hasn't sent yet is the highest
-/// value seen; HpSent and ManaSent say the game's own is known.</summary>
-public sealed record Vitals(long? Hp, long MaxHp, int? Mana, int MaxMana, int? Stamina = null, int MaxStamina = 0, bool HpSent = false, bool ManaSent = false)
+/// value seen; HpSent and ManaSent say the game's own is known. Shield is what your shields
+/// have left to absorb, all added up.</summary>
+public sealed record Vitals(long? Hp, long MaxHp, int? Mana, int MaxMana, int? Stamina = null, int MaxStamina = 0, bool HpSent = false, bool ManaSent = false, long Shield = 0)
 {
+    public double ShieldShare => MaxHp > 0 ? Math.Clamp((double)Shield / MaxHp, 0, 1) : 0;
     public double HpShare => Hp is long hp && MaxHp > 0 ? Math.Clamp((double)hp / MaxHp, 0, 1) : 0;
     public double ManaShare => Mana is int mana && MaxMana > 0 ? Math.Clamp((double)mana / MaxMana, 0, 1) : 0;
     public double StaminaShare => Stamina is int stamina && MaxStamina > 0 ? Math.Clamp((double)stamina / MaxStamina, 0, 1) : 0;
@@ -45,6 +47,13 @@ public static class GameNames
     public const uint DotTicks = 0x8000_0000;
 
     public static Npc? FindNpc(int code) => Npcs.Value.GetValueOrDefault(code);
+
+    // Skills (base ids, last four digits zeroed) whose absorbing effect is a shield, as the
+    // game's blue HP bar shows it; others, such as Recuperation, are heals that drain in ticks.
+    static readonly HashSet<uint> Shields = new() { 12320000 /* Nezekan's Shield */, 18730000 /* Protection Circle */ };
+
+    /// <summary>Whether a skill's absorbing effect is a shield.</summary>
+    public static bool IsShield(uint skill) => Shields.Contains(skill - skill % 10000);
 
     /// <summary>Whether a skill's ticks are damage over time, from A2Tools DPS Meter's list.</summary>
     public static bool IsDot(uint skill) => Dots.Value.Contains(skill);

@@ -30,6 +30,8 @@ public sealed class Engine
     readonly Dictionary<int, (int Hp, int Max)> health = new();
     readonly HashSet<int> floored = new(), scarecrows = new();
     readonly Dictionary<int, Vitals> vitals = new();
+    // Your shields by effect id: what each has left, and when it was last heard of.
+    readonly Dictionary<int, (int Left, DateTimeOffset At)> shields = new();
     readonly Dictionary<int, long> combatPower = new();
     readonly Dictionary<int, HashSet<int>> powers = new();
     readonly Dictionary<int, HashSet<uint>> skills = new();
@@ -96,6 +98,9 @@ public sealed class Engine
         Gap(id, 0, now);
         Damage.Finish();
         flow = null;
+        shields.Clear();
+        Session.Forget();
+        Items.Forget();
         LocalEntity = null;
         Character = null;
         Assumed = false;
@@ -195,6 +200,11 @@ public sealed class Engine
         switch (message)
         {
             case CharacterIdentity identity:
+                // Another character's bag has other totals.
+                if (Character != null && Character != identity.Name)
+                    Session.Forget();
+                    Items.Forget();
+        Items.Forget();
                 (LocalEntity, Character, Assumed, claimed) = (identity.Entity, identity.Name, false, false);
                 hints.Clear();
                 namesDirty |= names.GetValueOrDefault(identity.Entity) != identity.Name;
@@ -253,6 +263,27 @@ public sealed class Engine
                 }
 
                 break;
+            case ShieldChanged shield when shield.Target == LocalEntity && GameNames.IsShield(shield.Skill):
+                if (shield.Remaining > 0)
+                    shields[shield.Effect] = (shield.Remaining, clock);
+                else
+                    shields.Remove(shield.Effect);
+                break;
+            case BagChanged bag:
+                foreach (var slot in bag.Slots)
+                {
+                    Session.Saw(slot.Item, slot.Count);
+                    Items.Saw(slot, clock);
+                }
+
+                break;
+            case RankPoints rank:
+                Session.Saw(SessionGains.RankPoints, rank.Total);
+                break;
+            case EffectsEnded ended when ended.Target == LocalEntity:
+                foreach (int effect in ended.Effects)
+                    shields.Remove(effect);
+                break;
             case SelfHint hint:
                 Hint(hint.Entity);
                 if (hint is not { Hp: null, Mana: null, Stamina: null, MaxHp: null, MaxMana: null })
@@ -298,12 +329,26 @@ public sealed class Engine
         vitals[hint.Entity] = known;
     }
 
+    /// <summary>Currencies earned this session.</summary>
+    public SessionGains Session { get; } = new(DateTimeOffset.UtcNow);
+    public ItemLog Items { get; } = new();
+
     /// <summary>When you last did something the game tells of: a hit, or HP, mana or stamina
     /// going down. Moving alone isn't sent back, so it doesn't count.</summary>
     public DateTimeOffset? ActiveAt { get; private set; }
 
-    /// <summary>Your own HP, mana and stamina, once the game has sent any of them.</summary>
-    public Vitals? Own() => LocalEntity is int self ? vitals.GetValueOrDefault(self) : null;
+    /// <summary>Your own HP, mana and stamina, once the game has sent any of them, and your shields.</summary>
+    public Vitals? Own()
+    {
+        if (LocalEntity is not int self || vitals.GetValueOrDefault(self) is not { } own)
+            return null;
+        // Each shield's end is sent; one missed (a lost packet) is dropped after a while.
+        foreach (var (effect, shield) in shields.Where(s => clock - s.Value.At > ShieldLimit).ToList())
+            shields.Remove(effect);
+        return own with { Shield = shields.Values.Sum(s => (long)s.Left) };
+    }
+
+    static readonly TimeSpan ShieldLimit = TimeSpan.FromSeconds(30);
 
     /// <summary>The boss or training dummy taking the most damage in this fight, once its HP
     /// is known.</summary>

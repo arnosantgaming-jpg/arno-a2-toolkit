@@ -27,7 +27,7 @@ public abstract class MapToolWindow : Window
     readonly int startY;
     readonly Action save;
     readonly StackPanel actions = new() { Orientation = Orientation.Horizontal };
-    readonly Border backdrop = new() { BorderThickness = new Thickness(1) };
+    readonly Border backdrop = new() { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1) };
     FullMapWindow? fullMap;
 
     protected readonly IBrush Line, Muted, Bright;
@@ -54,7 +54,7 @@ public abstract class MapToolWindow : Window
         ToolTheme.Tint(this, colors.Accent);
 
         Status.Foreground = Muted;
-        backdrop.BorderBrush = Line;
+        backdrop.BorderBrush = Navy.OverlayRim;
         actions.Children.Add(Dps.Ui.Flat("✕", Close, "Close", Line, Muted));
         var header = new DockPanel { Margin = new Thickness(2, 0, 0, 3), Background = Brushes.Transparent };
         header.PointerPressed += (_, e) =>
@@ -81,12 +81,12 @@ public abstract class MapToolWindow : Window
         footer.Children.Add(grip);
         footer.Children.Add(Status);
 
-        var layout = new DockPanel { Margin = new Thickness(5) };
+        var layout = new DockPanel { Margin = new Thickness(9, 6, 9, 6) };
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(footer, Dock.Bottom);
         layout.Children.Add(header);
         layout.Children.Add(footer);
-        layout.Children.Add(new Border { Child = table, BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), ClipToBounds = true });
+        layout.Children.Add(new Border { Child = table, CornerRadius = new CornerRadius(5), ClipToBounds = true });
         backdrop.ClipToBounds = true;
         backdrop.Child = layout;
         Content = backdrop;
@@ -99,6 +99,7 @@ public abstract class MapToolWindow : Window
             PositionChanged += (_, e) => (look.X, look.Y) = (e.Point.X, e.Point.Y);
             SizeChanged += (_, e) => (look.Width, look.Height) = (e.NewSize.Width, e.NewSize.Height);
             layer.Hub.Attach();
+            layer.Hub.Mini.Join(layer);
             Update();
         };
         Closed += (_, _) =>

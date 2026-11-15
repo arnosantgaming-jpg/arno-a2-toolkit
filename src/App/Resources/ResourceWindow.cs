@@ -58,7 +58,6 @@ public sealed class ResourceSettingsPanel : UserControl
         panel.Children.Add(new ResourcePicker(layer));
         panel.Children.Add(Ui.Note("Nodes are shared between players and respawn, so a dot is a place to check. There are no respawn timers: nothing reliable is known about them."));
         MapToolWindow.LookSettings(panel, layer.Preferences, layer.Save, window);
-        MiniMapSettings.Add(panel, layer.Hub);
         Content = panel;
     }
 }

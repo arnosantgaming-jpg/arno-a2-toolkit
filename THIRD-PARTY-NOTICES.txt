@@ -17,6 +17,12 @@ Map tiles, spawn data and calibration (assets/maps, data/FarmingSpawns.json)
   The position message layouts and the map calibration constants used by this
   program were also studied from that project (2026-10-24).
 
+Item names, categories and grades (data/Items.tsv)
+  From aion2data.com's public item list, https://aion2data.com/raw/items.json
+  (client 2026.10.28), which the site offers free to use with a visible link to
+  aion2data.com; the About page and the item log's tooltip show it. Refreshed with tools/update-items.sh.
+  Game data, the property of NCSOFT; no licence to it is granted here.
+
 Gathering node positions (data/ResourceNodes.json) and Hidden Cube spots (data/CubeSpots.json)
   AION 2 game data, the property of NCSOFT. No licence to it is granted here.
 

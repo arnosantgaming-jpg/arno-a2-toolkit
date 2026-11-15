@@ -10,7 +10,9 @@ public sealed record LiveMapView(int Zone, string? Region, float? X, float? Y, b
 /// <param name="Background">Colour around the tiles: the sea, or the Abyss's void (the tiles' own edge colour).</param>
 /// <param name="VoidGray">The game's minimap draws this map's void pale grey where the tiles have it dark:
 /// the tiles' void brightness, painted over the minimap's void before matching (null = no void).</param>
-public sealed record WorldMap(string Key, int Tile, int Grid, double Scale, double OffsetX, double OffsetY, string Background = "#0E1A22", float? VoidGray = null)
+/// <param name="ReadsMinimap">The game's minimap can be placed on these tiles. Altgard's differ too
+/// much from it: every scale scores at noise level there and stray locks move the player.</param>
+public sealed record WorldMap(string Key, int Tile, int Grid, double Scale, double OffsetX, double OffsetY, string Background = "#0E1A22", float? VoidGray = null, bool ReadsMinimap = true)
 {
     public double Span => Tile * Grid;
     public (double X, double Y) Normalize(double worldX, double worldY) => ((OffsetX + Scale * worldX) / Span, (OffsetY + Scale * worldY) / Span);
@@ -24,7 +26,7 @@ public static class WorldMaps
     public static IReadOnlyDictionary<string, WorldMap> All { get; } = new Dictionary<string, WorldMap>
     {
         ["verteron"] = new("verteron", 2048, 8, 0.019583509634873143, 8218.937975984913, 8147.450753846877),
-        ["altgard"] = new("altgard", 1024, 8, 0.0098227439264612, 4137.781824319782, 4062.9907075320293),
+        ["altgard"] = new("altgard", 1024, 8, 0.0098227439264612, 4137.781824319782, 4062.9907075320293, ReadsMinimap: false),
         // Reshanta (Abyss_Reshanta_A): four tiles in the middle of a 4×4 grid.
         ["abyss"] = new("abyss", 1024, 4, 0.009878286530741168, 2047.1930445744983, 2056.9061147139305, "#1E272C", 37)
     };

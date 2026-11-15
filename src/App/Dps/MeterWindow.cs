@@ -76,7 +76,7 @@ public sealed class MeterWindow : Window
         table.Children.Add(titles);
         table.Children.Add(new ScrollViewer { Content = rows });
 
-        var layout = new DockPanel { Margin = new Thickness(5) };
+        var layout = new DockPanel { Margin = new Thickness(9, 6, 9, 6) };
         DockPanel.SetDock(header, Dock.Top);
         var grip = new TextBlock { Text = "◢", FontSize = 9, Foreground = Ui.Muted, Cursor = new Cursor(StandardCursorType.BottomRightCorner), Padding = new Thickness(4, 2, 0, 0) };
         grip.PointerPressed += (_, e) => BeginResizeDrag(WindowEdge.SouthEast, e);
@@ -93,8 +93,8 @@ public sealed class MeterWindow : Window
         layout.Children.Add(header);
         layout.Children.Add(footer);
         layout.Children.Add(hpBar);
-        layout.Children.Add(new Border { Child = table, BorderBrush = Ui.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), ClipToBounds = true });
-        Content = backdrop = new Border { Child = layout, BorderBrush = Ui.Line, BorderThickness = new Thickness(1) };
+        layout.Children.Add(new Border { Child = table, CornerRadius = new CornerRadius(5), ClipToBounds = true });
+        Content = backdrop = new Border { Child = layout, CornerRadius = new CornerRadius(8), BorderBrush = Navy.OverlayRim, BorderThickness = new Thickness(1), ClipToBounds = true };
         ApplyOpacity();
 
         Opened += (_, _) =>

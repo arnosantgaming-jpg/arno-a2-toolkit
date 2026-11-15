@@ -28,6 +28,8 @@ public sealed class MapPreferences : MapLook
     public int? PetId { get; set; }
     public string? LastRegion { get; set; } = "verteron";
     public bool ReadMinimap { get; set; } = true;
+    /// <summary>The shared mini-map is switched on.</summary>
+    public bool MiniMap { get; set; }
     public bool LearnSpawns { get; set; }
     /// <summary>Tile pixels per minimap pixel, found by calibration (null = calibrate).</summary>
     public double? MinimapRatio { get; set; }

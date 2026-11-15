@@ -10,7 +10,7 @@ namespace ArnoA2.App;
 /// <summary>The always-on-top ping readout. Drag it anywhere; the hub's switch closes it.</summary>
 public sealed class PingWindow : Window
 {
-    static readonly IBrush Good = Brush.Parse("#35D986"), Fair = Brush.Parse("#F2B632"), Bad = Brush.Parse("#FF5A60"), Unknown = Brush.Parse("#AEBBCF");
+    static readonly IBrush Good = Navy.Success, Fair = Navy.Warning, Bad = Navy.Danger, Unknown = Navy.OverlayText2;
     readonly AppState app;
     readonly TextBlock value = new() { FontSize = 15, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center };
 
@@ -31,7 +31,7 @@ public sealed class PingWindow : Window
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7 };
         row.Children.Add(new TextBlock { Text = "PING", FontSize = 10.5, FontWeight = FontWeight.SemiBold, LetterSpacing = 1, Foreground = Unknown, VerticalAlignment = VerticalAlignment.Center });
         row.Children.Add(value);
-        var face = new Border { Padding = new Thickness(10, 4), MinWidth = 104, CornerRadius = new CornerRadius(5), Background = new SolidColorBrush(Color.Parse("#05070D"), 0.72), Child = row, Cursor = new Cursor(StandardCursorType.SizeAll) };
+        var face = new Border { Padding = new Thickness(10, 4), MinWidth = 104, CornerRadius = new CornerRadius(7), Background = Navy.Overlay, BorderBrush = Navy.OverlayRim, BorderThickness = new Thickness(1), Child = row, Cursor = new Cursor(StandardCursorType.SizeAll) };
         ToolTip.SetTip(face, "The game's own ping, updated every 10 seconds. Drag to move");
         face.PointerPressed += (_, e) => BeginMoveDrag(e);
         Content = face;

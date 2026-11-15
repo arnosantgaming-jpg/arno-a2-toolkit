@@ -17,13 +17,14 @@ public sealed class EventAlerts
 
 /// <summary>
 /// The game's timed events, from their published schedule on the server clock (GMT+9, Taiwan
-/// GMT+8): the Shugo Festival on the hour, the Air Raid at half past, and the Spacetime Rift
+/// GMT+8): the Shugo Festival on the hour, a Dimensional Invasion (an Air Raid, Accursed
+/// Sword or Incursion of the Spirits, picked at random) at half past, and the Spacetime Rift
 /// every three hours (from 00:00 on Global, 02:00 in Korea and Taiwan). Nothing is read from
 /// the game, so a schedule change after maintenance needs an update here.
 /// </summary>
 public static class GameEvents
 {
-    public const string Shugo = "Shugo Festival", AirRaid = "Air Raid", Rift = "Spacetime Rift";
+    public const string Shugo = "Shugo Festival", AirRaid = "Dimensional Invasion", Rift = "Spacetime Rift";
     public static readonly string[] Servers = { "Global", "Korea", "Taiwan" };
     static readonly TimeSpan Minute = TimeSpan.FromMinutes(1);
 
@@ -99,7 +100,7 @@ public sealed class EventSettingsPanel : UserControl
             saved.Shugo = v;
             Changed();
         }));
-        panel.Children.Add(Ui.Toggle("Air Raid, every hour at half past", saved.AirRaid, v =>
+        panel.Children.Add(Ui.Toggle("Dimensional Invasion (Air Raid and others), every hour at half past", saved.AirRaid, v =>
         {
             saved.AirRaid = v;
             Changed();

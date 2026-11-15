@@ -36,18 +36,19 @@ public sealed class BarSettings
 /// Your HP, mana and stamina as wide bars to put anywhere on the screen. A hit leaves a pale strip
 /// that drains after a moment, so you see how much it took. The game sends a value only when
 /// it changes, so each bar learns its maximum from the highest value seen and is blank until
-/// its first change. They dim when you've done nothing for a moment. Drag to move; right-click
+/// its first change. A shield on you shows as a blue part after your HP, as in the game, with
+/// what it has left after the HP numbers. They dim when you've done nothing for a moment. Drag to move; right-click
 /// for options.
 /// </summary>
 public sealed class BarsWindow : Window
 {
-    static readonly IBrush Track = new SolidColorBrush(Color.Parse("#0B0C10"), 0.82), Rim = Brush.Parse("#5A5546"), Chip = Brush.Parse("#F0DBA8"), Label = Brush.Parse("#F4F2EA"), Waiting = Brush.Parse("#9C9888");
+    static readonly IBrush Track = new SolidColorBrush(Color.Parse("#080D16"), 0.82), Rim = Brush.Parse("#3A5270"), Chip = Brush.Parse("#F0DBA8"), Shield = Brush.Parse("#4FA3E8"), Label = Navy.OverlayText, Waiting = Brush.Parse("#8A9BB0");
     static readonly TimeSpan ChipHold = TimeSpan.FromMilliseconds(500), FadeAfter = TimeSpan.FromSeconds(4), IdleAfter = TimeSpan.FromSeconds(2);
     readonly AppState app;
     readonly BarSettings saved;
     readonly Action save;
     readonly DispatcherTimer frame = new() { Interval = TimeSpan.FromMilliseconds(40) };
-    readonly Border hpTrack = Frame(), manaTrack = Frame(), staminaTrack = Frame(), hpFill = new(), hpChip = new() { Background = Chip }, manaFill = new(), staminaFill = new();
+    readonly Border hpTrack = Frame(), manaTrack = Frame(), staminaTrack = Frame(), hpFill = new(), hpChip = new() { Background = Chip }, shieldFill = new() { Background = Shield }, manaFill = new(), staminaFill = new();
     readonly TextBlock hpText = Text(), manaText = Text();
     readonly Border face;
     double hpShown, chipShown, manaShown, staminaShown, width;
@@ -71,7 +72,7 @@ public sealed class BarsWindow : Window
         TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
         Background = Brushes.Transparent;
 
-        hpTrack.Child = new Panel { Children = { Left(hpChip), Left(hpFill), hpText } };
+        hpTrack.Child = new Panel { Children = { Left(hpChip), Left(hpFill), Left(shieldFill), hpText } };
         manaTrack.Child = new Panel { Children = { Left(manaFill), manaText } };
         staminaTrack.Child = Left(staminaFill);
         var stack = new StackPanel { Spacing = 3 };
@@ -141,20 +142,27 @@ public sealed class BarsWindow : Window
         _ => (380, 19)
     };
 
-    /// <summary>What a bar says: "30,790 / 30,790", "100 %", or nothing.</summary>
-    public static string Reading(long? value, long max, string style)
+    /// <summary>What a bar says: "30,790 / 30,790", "100 %", or nothing, with a shield's
+    /// amount after it: "30,790 / 30,790 + 12,309".</summary>
+    public static string Reading(long? value, long max, string style, long shield = 0)
     {
         if (value is not long now)
             return "";
-        return style switch
+        string reading = style switch
         {
             "Percent" => (max > 0 ? Math.Round(100.0 * now / max) : 0).ToString("0", CultureInfo.InvariantCulture) + " %",
             "None" => "",
             _ => now.ToString("N0", CultureInfo.InvariantCulture) + " / " + max.ToString("N0", CultureInfo.InvariantCulture)
         };
+        return shield > 0 && reading.Length > 0 ? reading + " + " + shield.ToString("N0", CultureInfo.InvariantCulture) : reading;
     }
 
-    void Restyle()
+    /// <summary>Where the shield's blue part starts and how wide it is, as shares of the bar:
+    /// right after your HP, or over its end when HP and shield together are more than the bar.</summary>
+    public static (double Start, double Width) ShieldPart(double hp, double shield) => (Math.Max(0, Math.Min(hp, 1 - shield)), shield);
+
+    /// <summary>Redraws after a setting changed.</summary>
+    public void Restyle()
     {
         var (barWidth, height) = Dimensions(saved.Size);
         width = barWidth;
@@ -166,6 +174,9 @@ public sealed class BarsWindow : Window
         manaText.FontSize = Math.Max(9, manaTrack.Height * 0.72);
         staminaTrack.Height = Math.Max(5, Math.Round(height * 0.32));
         staminaTrack.IsVisible = saved.Stamina;
+        // Rounded ends, as the overlays' faces are.
+        foreach (var track in new[] { hpTrack, manaTrack, staminaTrack })
+            track.CornerRadius = new CornerRadius(Math.Min(track.Height / 2, 7));
         manaText.IsVisible = numbers;
         hpFill.Background = Brush.Parse(Pick(BarSettings.HpColors, saved.HpColor));
         manaFill.Background = Brush.Parse(Pick(BarSettings.ManaColors, saved.ManaColor));
@@ -193,9 +204,12 @@ public sealed class BarsWindow : Window
         hpChip.Width = width * chipShown;
         manaFill.Width = width * manaShown;
         staminaFill.Width = width * staminaShown;
+        var (shieldStart, shieldWidth) = ShieldPart(hpShown, own?.Hp == null ? 0 : own.ShieldShare);
+        shieldFill.Margin = new Thickness(width * shieldStart, 0, 0, 0);
+        shieldFill.Width = width * shieldWidth;
         bool low = own?.Hp != null && saved.LowHp > 0 && hp * 100 < saved.LowHp;
         hpFill.Opacity = low ? 0.6 + 0.4 * Math.Abs(Math.Sin(now.ToUnixTimeMilliseconds() / 260.0)) : 1;
-        hpText.Text = own?.Hp == null ? "HP shows after its first change" : Reading(own.Hp, own.MaxHp, saved.Numbers);
+        hpText.Text = own?.Hp == null ? "HP shows after its first change" : Reading(own.Hp, own.MaxHp, saved.Numbers, own.Shield);
         hpText.Foreground = own?.Hp == null ? Waiting : Label;
         manaText.Text = Reading(own?.Mana, own?.MaxMana ?? 0, saved.Numbers);
 
@@ -210,36 +224,10 @@ public sealed class BarsWindow : Window
         face.IsHitTestVisible = target > 0;
     }
 
-    List<MenuItem> Options()
-    {
-        MenuItem Item(string header, bool on, Action pick)
-        {
-            var item = new MenuItem { Header = (on ? "● " : "    ") + header };
-            item.Click += (_, _) =>
-            {
-                pick();
-                save();
-                Restyle();
-            };
-            return item;
-        }
+    /// <summary>Opens the bars' settings in the toolkit.</summary>
+    public Action? ShowSettings { get; set; }
 
-        MenuItem Group(string header, IEnumerable<MenuItem> items) => new() { Header = header, ItemsSource = items.ToList() };
-
-        return new List<MenuItem>
-        {
-            Group("Size", BarSettings.Sizes.Select(s => Item(s, saved.Size == s, () => saved.Size = s))),
-            Group("Text", BarSettings.NumberStyles.Select(s => Item(s, saved.Numbers == s, () => saved.Numbers = s))),
-            Group("HP colour", BarSettings.HpColors.Select(c => Item(c.Name, saved.HpColor == c.Name, () => saved.HpColor = c.Name))),
-            Group("Mana colour", BarSettings.ManaColors.Select(c => Item(c.Name, saved.ManaColor == c.Name, () => saved.ManaColor = c.Name))),
-            Group("Stamina colour", BarSettings.StaminaColors.Select(c => Item(c.Name, saved.StaminaColor == c.Name, () => saved.StaminaColor = c.Name))),
-            Item("Stamina bar", saved.Stamina, () => saved.Stamina = !saved.Stamina),
-            Group("Low HP pulse", new[] { 0, 20, 30, 50 }.Select(p => Item(p == 0 ? "Off" : $"Below {p} %", saved.LowHp == p, () => saved.LowHp = p))),
-            Item("Fade when full", saved.Fade, () => saved.Fade = !saved.Fade),
-            Item("Fade when idle", saved.IdleFade, () => saved.IdleFade = !saved.IdleFade),
-            Item("Close", false, Close)
-        };
-    }
+    List<MenuItem> Options() => OverlayMenu.Items(ShowSettings, Close);
 
     static string Pick((string Name, string Color)[] colors, string name) => colors.FirstOrDefault(c => c.Name == name).Color ?? colors[0].Color;
 
